@@ -4,6 +4,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@theme inline {
+  --font-display: "Instrument Serif", Georgia, serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --color-ink: var(--ink);
+  --color-parchment: var(--parchment);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --shadow-page: 0 1px 2px oklch(0.25 0.03 260 / 0.08), 0 12px 34px oklch(0.25 0.03 260 / 0.12);
+  --shadow-soft: 0 1px 2px oklch(0.25 0.03 260 / 0.06), 0 8px 24px oklch(0.25 0.03 260 / 0.07);
+}
+
 /*
  * Design system definition.
  *
@@ -62,26 +76,32 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
+  --radius: 0.5rem;
+  --background: oklch(0.978 0.008 85);
+  --foreground: oklch(0.24 0.03 259);
+  --ink: oklch(0.24 0.03 259);
+  --parchment: oklch(0.978 0.008 85);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
+  --card-foreground: oklch(0.24 0.03 259);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --popover-foreground: oklch(0.24 0.03 259);
+  --primary: oklch(0.31 0.055 258);
+  --primary-foreground: oklch(0.98 0.008 85);
+  --secondary: oklch(0.945 0.014 85);
+  --secondary-foreground: oklch(0.3 0.04 258);
+  --muted: oklch(0.948 0.011 85);
+  --muted-foreground: oklch(0.52 0.022 262);
+  --accent: oklch(0.74 0.13 68);
+  --accent-foreground: oklch(0.24 0.04 60);
+  --destructive: oklch(0.55 0.19 27);
+  --destructive-foreground: oklch(0.98 0.008 85);
+  --success: oklch(0.56 0.11 155);
+  --success-foreground: oklch(0.98 0.008 85);
+  --warning: oklch(0.72 0.14 70);
+  --warning-foreground: oklch(0.24 0.04 60);
+  --border: oklch(0.9 0.012 80);
+  --input: oklch(0.9 0.012 80);
+  --ring: oklch(0.74 0.13 68);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -140,5 +160,116 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+}
+
+@utility rule-line {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in oklch, var(--color-accent) 60%, transparent),
+    transparent
+  );
+  height: 2px;
+}
+
+/* A page in the document preview mirrors the exported file exactly. */
+@utility doc-page {
+  background: white;
+  color: oklch(0.18 0.01 260);
+  box-shadow: var(--shadow-page);
+  width: 100%;
+  max-width: 46rem;
+  aspect-ratio: 1 / 1.414;
+  font-family: var(--font-serif);
+}
+
+@utility doc-canvas {
+  background: color-mix(in oklch, var(--color-secondary) 70%, transparent);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1rem;
+  overflow-x: auto;
+}
+
+.doc-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.doc-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.doc-page-number {
+  text-align: center;
+  font-size: 0.75rem;
+  padding-top: 0.5rem;
+}
+.doc-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.25em;
+  margin-bottom: 0.6em;
+}
+.doc-center {
+  text-align: center;
+  margin-bottom: 0.4em;
+}
+.doc-h1 {
+  text-align: center;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin: 0.8em 0 0.5em;
+  font-family: inherit;
+}
+.doc-h2 {
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+  font-family: inherit;
+}
+.doc-para {
+  text-align: justify;
+  margin-bottom: 0.5em;
+}
+.doc-caption {
+  text-align: center;
+  font-style: italic;
+  font-size: 0.92em;
+  margin-bottom: 0.5em;
+}
+.doc-listline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.2em;
+}
+.doc-dots {
+  flex: 1;
+  border-bottom: 1px dotted currentColor;
+  opacity: 0.5;
+  transform: translateY(-0.2em);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .doc-page {
+    box-shadow: none !important;
+    max-width: none !important;
+    aspect-ratio: auto !important;
+    page-break-after: always;
+    break-after: page;
   }
 }

@@ -1,0 +1,46 @@
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import type { User } from "@supabase/supabase-js";
+
+export function SiteHeader({ user }: { user?: User | null }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  async function signOut() {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
+  return (
+    <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+        <Link to="/" className="flex items-baseline gap-2">
+          <span className="font-display text-2xl">AcadFormat</span>
+          <span className="hidden text-xs uppercase tracking-[0.2em] text-muted-foreground sm:inline">
+            document engine
+          </span>
+        </Link>
+        <nav className="flex items-center gap-2">
+          {user ? (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/dashboard">My documents</Link>
+              </Button>
+              <Button variant="outline" size="sm" onClick={signOut}>
+                Sign out
+              </Button>
+            </>
+          ) : (
+            <Button asChild size="sm">
+              <Link to="/auth">Sign in</Link>
+            </Button>
+          )}
+        </nav>
+      </div>
+    </header>
+  );
+}
