@@ -194,10 +194,6 @@
   font-family: var(--font-serif);
 }
 
-@media print {
-  /* keep preview typography rules above print overrides */
-}
-
 @utility doc-canvas {
   background: color-mix(in oklch, var(--color-secondary) 70%, transparent);
   border-radius: var(--radius-lg);
