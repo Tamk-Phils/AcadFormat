@@ -1,5 +1,6 @@
 import {
   AlignmentType,
+  ImageRun,
   Document,
   Footer,
   NumberFormat,
@@ -15,7 +16,24 @@ import type { InstitutionConfig } from "./institutions";
 
 const DXA_PER_INCH = 1440;
 
-function renderPage(page: RenderedPage, config: InstitutionConfig, isLast: boolean): Paragraph[] {
+export interface ImageAsset {
+  data: Uint8Array;
+  type: "png" | "jpg" | "gif" | "bmp";
+}
+
+function imageType(contentType: string): ImageAsset["type"] {
+  if (/jpe?g/i.test(contentType)) return "jpg";
+  if (/gif/i.test(contentType)) return "gif";
+  if (/bmp/i.test(contentType)) return "bmp";
+  return "png";
+}
+
+function renderPage(
+  page: RenderedPage,
+  config: InstitutionConfig,
+  breakAfter: boolean,
+  images: Map<string, ImageAsset>,
+): Paragraph[] {
   const font = config.font;
   const size = config.fontSizePt * 2;
   const spacing = { line: Math.round(config.lineSpacing * 240), after: 120 };
@@ -28,6 +46,46 @@ function renderPage(page: RenderedPage, config: InstitutionConfig, isLast: boole
     }
     const common = { font, size };
     switch (block.type) {
+      case "logos": {
+        const runs = (block.imageIds ?? [])
+          .map((id) => images.get(id))
+          .filter((asset): asset is ImageAsset => Boolean(asset))
+          .map(
+            (asset) =>
+              new ImageRun({
+                type: asset.type,
+                data: asset.data,
+                transformation: { width: 90, height: 90 },
+                altText: { title: "Logo", description: "Institution logo", name: "logo" },
+              }),
+          );
+        if (runs.length > 0)
+          paragraphs.push(new Paragraph({ alignment: AlignmentType.CENTER, children: runs }));
+        break;
+      }
+      case "image": {
+        const asset = block.imageId ? images.get(block.imageId) : undefined;
+        if (asset)
+          paragraphs.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 120, after: 120 },
+              children: [
+                new ImageRun({
+                  type: asset.type,
+                  data: asset.data,
+                  transformation: { width: 420, height: 280 },
+                  altText: {
+                    title: "Figure",
+                    description: block.text || "Figure",
+                    name: "figure",
+                  },
+                }),
+              ],
+            }),
+          );
+        break;
+      }
       case "title":
         paragraphs.push(
           new Paragraph({
@@ -95,11 +153,15 @@ function renderPage(page: RenderedPage, config: InstitutionConfig, isLast: boole
     }
   });
 
-  if (!isLast) paragraphs.push(new Paragraph({ children: [new PageBreak()] }));
+  if (breakAfter) paragraphs.push(new Paragraph({ children: [new PageBreak()] }));
   return paragraphs;
 }
 
-export async function buildDocx(final: FinalDocument, config: InstitutionConfig) {
+export async function buildDocx(
+  final: FinalDocument,
+  config: InstitutionConfig,
+  images: Map<string, ImageAsset> = new Map(),
+) {
   const margin = {
     top: Math.round(config.marginsIn.top * DXA_PER_INCH),
     bottom: Math.round(config.marginsIn.bottom * DXA_PER_INCH),
@@ -131,7 +193,9 @@ export async function buildDocx(final: FinalDocument, config: InstitutionConfig)
           page: { ...page, pageNumbers: { start: 1, formatType: NumberFormat.LOWER_ROMAN } },
         },
         footers: { default: footer(NumberFormat.LOWER_ROMAN) },
-        children: prelim.flatMap((p, i) => renderPage(p, config, i === prelim.length - 1)),
+        children: prelim.flatMap((p, i) =>
+          renderPage(p, config, i < prelim.length - 1 && Boolean(prelim[i + 1]?.startsSection), images),
+        ),
       },
       {
         properties: {
@@ -139,7 +203,9 @@ export async function buildDocx(final: FinalDocument, config: InstitutionConfig)
           page: { ...page, pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL } },
         },
         footers: { default: footer(NumberFormat.DECIMAL) },
-        children: body.flatMap((p, i) => renderPage(p, config, i === body.length - 1)),
+        children: body.flatMap((p, i) =>
+          renderPage(p, config, i < body.length - 1 && Boolean(body[i + 1]?.startsSection), images),
+        ),
       },
     ],
   });
