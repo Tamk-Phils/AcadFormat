@@ -220,13 +220,23 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   // ---- Preliminary pages (roman numerals, generated lists) ----
   const prelimPages: RenderedPage[] = [];
   const addPrelim = (sectionTitle: string, blocks: Block[], kind: "cover" | "preliminary") => {
-    chunkBlocks(blocks).forEach((pageBlocks) => {
-      prelimPages.push({ index: 0, numberLabel: "", kind, sectionTitle, blocks: pageBlocks });
+    chunkBlocks(blocks).forEach((pageBlocks, i) => {
+      prelimPages.push({
+        index: 0,
+        numberLabel: "",
+        kind,
+        sectionTitle,
+        startsSection: i === 0,
+        blocks: pageBlocks,
+      });
     });
   };
 
   const meta = model.meta;
   const coverBlocks: Block[] = [
+    ...(logoImages.length > 0
+      ? [{ type: "logos" as const, text: "", imageIds: logoImages.map((image) => image.id) }]
+      : []),
     { type: "center", text: "REPUBLIC OF CAMEROON" },
     { type: "center", text: "Peace – Work – Fatherland" },
     { type: "center", text: selection.university.toUpperCase() },
@@ -341,6 +351,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     listOfFigures,
     listOfTables,
     listOfAbbreviations,
+    images: model.images ?? [],
     generatedAt: new Date().toISOString(),
   };
 }
