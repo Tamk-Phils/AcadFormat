@@ -7,7 +7,8 @@ import type {
 } from "./document-model";
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
 
-const CHARS_PER_PAGE = 1700;
+/** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
+const CHARS_PER_PAGE = 2900;
 
 const PRELIM_TITLES: Partial<Record<SectionType, string>> = {
   COVER_PAGE: "Cover Page",
@@ -56,7 +57,15 @@ function chunkBlocks(blocks: Block[]): Block[][] {
   let used = 0;
   for (const block of blocks) {
     const weight =
-      block.type === "heading1" ? 420 : block.type === "heading2" ? 220 : block.text.length + 90;
+      block.type === "heading1"
+        ? 420
+        : block.type === "heading2"
+          ? 220
+          : block.type === "image"
+            ? 900
+            : block.type === "logos"
+              ? 300
+              : block.text.length + 60;
     if (used + weight > CHARS_PER_PAGE && current.length > 0) {
       pages.push(current);
       current = [];
@@ -94,11 +103,16 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         numberLabel: String(startNumber + i),
         kind,
         sectionTitle,
+        startsSection: i === 0,
         blocks: pageBlocks,
       });
     });
     return startNumber;
   };
+
+  const figureImages = (model.images ?? []).filter((image) => image.role === "figure");
+  const logoImages = (model.images ?? []).filter((image) => image.role === "logo");
+  let figureImageCursor = 0;
 
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   model.chapters.forEach((chapter, chapterIndex) => {
@@ -123,7 +137,13 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
           ? `Figure ${chapterNumber}.${figureIndex + 1}`
           : `Figure ${listOfFigures.length + figureIndex + 1}`;
       figureMarks.push({ label, caption: figure.caption, blockIndex: blocks.length });
-      blocks.push({ type: "center", text: `[ ${figure.originalLabel || figure.kind || "Figure"} ]` });
+      const image = figureImages[figureImageCursor];
+      if (image) {
+        figureImageCursor += 1;
+        blocks.push({ type: "image", text: figure.caption, imageId: image.id });
+      } else {
+        blocks.push({ type: "center", text: `[ ${figure.originalLabel || figure.kind || "Figure"} ]` });
+      }
       blocks.push({ type: "caption", text: `${label}: ${figure.caption}` });
     });
 
