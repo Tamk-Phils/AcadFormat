@@ -172,15 +172,6 @@ export const ASSIGNMENT_CONFIG: InstitutionConfig = {
   ],
 };
 
-interface UnusedSelectionMarker {
-  university: string;
-  school: string;
-  department: string;
-  documentType: string;
-  level: string;
-  configId: string;
-}
-
 export const UNIVERSITIES = [
   {
     name: "The University of Bamenda",
