@@ -150,6 +150,37 @@ export interface InstitutionSelection {
   configId: string;
 }
 
+export const ASSIGNMENT_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "assignment",
+  label: "Assignment / Coursework format",
+  source: "AcadFormat standard assignment layout",
+  lineSpacing: 1.5,
+  marginsIn: { top: 1, bottom: 1, left: 1, right: 1 },
+  figureNumbering: "sequential",
+  tableNumbering: "sequential",
+  preliminaryNumbering: "none",
+  coverPageNumbered: false,
+  preliminaryOrder: ["COVER_PAGE", "TABLE_OF_CONTENTS"],
+  bodyOutline: ["Introduction", "Body / Answers", "Conclusion"],
+  backMatter: ["REFERENCES"],
+  notes: [
+    "Cover page carries the course code and title, assignment title, student name and matricule, lecturer and date.",
+    "No declaration, certification, abstract or résumé — assignments keep only a cover page and an optional table of contents.",
+    "Figures and tables are numbered sequentially (Figure 1, Table 1) rather than per chapter.",
+    "Body pages are numbered in arabic numerals from the first content page.",
+  ],
+};
+
+interface UnusedSelectionMarker {
+  university: string;
+  school: string;
+  department: string;
+  documentType: string;
+  level: string;
+  configId: string;
+}
+
 export const UNIVERSITIES = [
   {
     name: "The University of Bamenda",
