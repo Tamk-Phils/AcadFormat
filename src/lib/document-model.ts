@@ -68,6 +68,14 @@ export interface DocumentModel {
   references: string[];
   appendices: { label: string; title: string; content: string }[];
   abbreviations: Abbreviation[];
+  images?: DocumentImage[];
+}
+
+export interface DocumentImage {
+  id: string;
+  path: string;
+  contentType: string;
+  role: "logo" | "figure";
 }
 
 export interface Understanding {
@@ -120,11 +128,15 @@ export type BlockType =
   | "center"
   | "caption"
   | "listline"
+  | "image"
+  | "logos"
   | "spacer";
 
 export interface Block {
   type: BlockType;
   text: string;
+  imageId?: string;
+  imageIds?: string[];
 }
 
 export interface RenderedPage {
@@ -132,6 +144,7 @@ export interface RenderedPage {
   numberLabel: string;
   kind: "cover" | "preliminary" | "body" | "back";
   sectionTitle: string;
+  startsSection?: boolean;
   blocks: Block[];
 }
 
@@ -147,5 +160,6 @@ export interface FinalDocument {
   listOfFigures: ListEntry[];
   listOfTables: ListEntry[];
   listOfAbbreviations: { label: string; text: string }[];
+  images?: DocumentImage[];
   generatedAt: string;
 }
