@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { auditFinalDocument, buildFinalDocument } from "./document-build";
 import type { DocumentImage, DocumentModel, IssueDraft } from "./document-model";
 import { resolveConfig, type InstitutionSelection } from "./institutions";
+import type { ImageAsset } from "./docx-export.server";
 
 /** Supabase jsonb columns are typed as Json; app types are structurally compatible. */
 const toJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as never;
@@ -154,7 +155,7 @@ export const exportDocx = createServerFn({ method: "POST" })
     if (error || !row?.final_document) throw new Error("Format the document before exporting.");
 
     const selection = row.institution as unknown as InstitutionSelection;
-    const { buildDocx, type ImageAsset } = await import("./docx-export.server");
+    const { buildDocx } = await import("./docx-export.server");
     const final = row.final_document as unknown as { images?: DocumentImage[] };
     const images = new Map<string, ImageAsset>();
     for (const image of final.images ?? []) {
