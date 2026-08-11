@@ -4,9 +4,11 @@ import type { InstitutionConfig } from "@/lib/institutions";
 export function DocumentPreview({
   final,
   config,
+  assetUrls = {},
 }: {
   final: FinalDocument;
   config: InstitutionConfig;
+  assetUrls?: Record<string, string>;
 }) {
   return (
     <div className="flex flex-col items-center gap-8">
@@ -27,6 +29,28 @@ export function DocumentPreview({
           <div className="doc-page-body">
             {page.blocks.map((block, index) => {
               if (block.type === "spacer") return <div key={index} className="h-6" />;
+              if (block.type === "logos")
+                return (
+                  <div key={index} className="mb-4 flex items-center justify-center gap-8">
+                    {(block.imageIds ?? [])
+                      .filter((id) => assetUrls[id])
+                      .map((id) => (
+                        <img key={id} src={assetUrls[id]} alt="Institution logo" className="h-20 w-auto" />
+                      ))}
+                  </div>
+                );
+              if (block.type === "image") {
+                const url = block.imageId ? assetUrls[block.imageId] : undefined;
+                if (!url) return null;
+                return (
+                  <img
+                    key={index}
+                    src={url}
+                    alt={block.text || "Figure"}
+                    className="mx-auto my-3 max-h-80 w-auto max-w-full"
+                  />
+                );
+              }
               if (block.type === "title")
                 return (
                   <p key={index} className="doc-title">
