@@ -196,10 +196,24 @@ export const DOCUMENT_TYPES = [
   "Thesis",
   "End of Course Project",
   "Internship Report",
+  "Assignment",
 ] as const;
 
 export const ACADEMIC_LEVELS = ["Bachelor's (BSc)", "Master's (MSc)", "PhD"] as const;
 
 export function getConfig(configId: string): InstitutionConfig {
+  if (configId === ASSIGNMENT_CONFIG.id) return ASSIGNMENT_CONFIG;
   return configId === COLTECH_CONFIG.id ? COLTECH_CONFIG : COMMON_CONFIG;
+}
+
+/**
+ * Assignments never follow the dissertation structure, so the document type
+ * wins over the school configuration when it is set to "Assignment".
+ */
+export function resolveConfig(selection: {
+  configId: string;
+  documentType?: string;
+}): InstitutionConfig {
+  if (selection.documentType === "Assignment") return ASSIGNMENT_CONFIG;
+  return getConfig(selection.configId);
 }
