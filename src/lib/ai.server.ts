@@ -15,6 +15,9 @@ Hard rules:
   Never invent results, statistics, values, references, or meanings.
 - When a caption, title, or abbreviation meaning cannot be established confidently, set the text to
   "REQUIRES_USER_REVIEW" and lower the confidence.
+- Embedded images appear in the text as [IMAGE:n] markers, in document order. Create ONE figure entry
+  per [IMAGE:n] marker that belongs to the main body (skip logo images at the very start of the file),
+  keeping them in the same order as the markers, and set originalLabel to the marker text.
 - Abbreviations must be extracted from the actual text with their real expansions.
 - Preserve the author's own content and wording; you restructure and label, you do not rewrite research.
 
