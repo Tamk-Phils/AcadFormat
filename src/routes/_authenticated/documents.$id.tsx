@@ -19,12 +19,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { analyzeDocument, exportDocx, formatDocument } from "@/lib/acadformat.functions";
+import {
+  analyzeDocument,
+  exportDocx,
+  formatDocument,
+  getAssetUrls,
+} from "@/lib/acadformat.functions";
 import {
   ACADEMIC_LEVELS,
   DOCUMENT_TYPES,
   UNIVERSITIES,
-  getConfig,
+  resolveConfig,
   type InstitutionSelection,
 } from "@/lib/institutions";
 import type {
@@ -65,6 +70,7 @@ function Workspace() {
   const runAnalyze = useServerFn(analyzeDocument);
   const runFormat = useServerFn(formatDocument);
   const runExport = useServerFn(exportDocx);
+  const fetchAssetUrls = useServerFn(getAssetUrls);
   const [busy, setBusy] = useState<string | null>(null);
 
   const doc = useQuery({
@@ -113,7 +119,16 @@ function Workspace() {
 
   const university = UNIVERSITIES.find((u) => u.name === selection.university) ?? UNIVERSITIES[0];
   const school = university.schools.find((s) => s.name === selection.school) ?? university.schools[0];
-  const config = useMemo(() => getConfig(selection.configId), [selection.configId]);
+  const config = useMemo(
+    () => resolveConfig(selection),
+    [selection.configId, selection.documentType],
+  );
+
+  const assets = useQuery({
+    queryKey: ["assets", id, doc.data?.final_document ? "ready" : "none"],
+    enabled: Boolean(doc.data?.final_document),
+    queryFn: () => fetchAssetUrls({ data: { documentId: id } }),
+  });
 
   async function analyze() {
     setBusy("analyze");
@@ -362,7 +377,7 @@ function Workspace() {
                 </ul>
               )}
               <div className="doc-canvas">
-                <DocumentPreview final={final} config={config} />
+                <DocumentPreview final={final} config={config} assetUrls={assets.data?.urls ?? {}} />
               </div>
             </CardContent>
           </Card>
