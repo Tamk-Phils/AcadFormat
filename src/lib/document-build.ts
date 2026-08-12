@@ -6,6 +6,7 @@ import type {
   RenderedPage,
 } from "./document-model";
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
+import { workLabel } from "./institutions";
 
 /** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
 const CHARS_PER_PAGE = 2900;
@@ -247,7 +248,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     { type: "spacer", text: "" },
     {
       type: "center",
-      text: `${selection.documentType} submitted in partial fulfilment of the requirements for the award of ${selection.level}`,
+      text: `${workLabel(selection.documentType, selection.level)} submitted in partial fulfilment of the requirements for the award of ${selection.level}`,
     },
     { type: "spacer", text: "" },
     { type: "center", text: (meta.author || "AUTHOR NAME").toUpperCase() },
