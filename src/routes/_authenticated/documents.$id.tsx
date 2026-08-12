@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DocumentPreview } from "@/components/workspace/DocumentPreview";
+import { OriginalPreview } from "@/components/workspace/OriginalPreview";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +23,17 @@ import { Progress } from "@/components/ui/progress";
 import {
   analyzeDocument,
   exportDocx,
+  exportPdf,
   formatDocument,
   getAssetUrls,
+  getOriginalDocument,
 } from "@/lib/acadformat.functions";
 import {
-  ACADEMIC_LEVELS,
+  ACADEMIC_LEVEL_NAMES,
   DOCUMENT_TYPES,
   UNIVERSITIES,
   resolveConfig,
+  workLabel,
   type InstitutionSelection,
 } from "@/lib/institutions";
 import type {
@@ -70,7 +74,9 @@ function Workspace() {
   const runAnalyze = useServerFn(analyzeDocument);
   const runFormat = useServerFn(formatDocument);
   const runExport = useServerFn(exportDocx);
+  const runExportPdf = useServerFn(exportPdf);
   const fetchAssetUrls = useServerFn(getAssetUrls);
+  const fetchOriginal = useServerFn(getOriginalDocument);
   const [busy, setBusy] = useState<string | null>(null);
 
   const doc = useQuery({
@@ -109,7 +115,7 @@ function Workspace() {
     school: UNIVERSITIES[0].schools[0].name,
     department: UNIVERSITIES[0].schools[0].departments[0],
     documentType: DOCUMENT_TYPES[0],
-    level: ACADEMIC_LEVELS[0],
+    level: ACADEMIC_LEVEL_NAMES[0]!,
     configId: UNIVERSITIES[0].schools[0].configId,
   });
 
@@ -128,6 +134,12 @@ function Workspace() {
     queryKey: ["assets", id, doc.data?.final_document ? "ready" : "none"],
     enabled: Boolean(doc.data?.final_document),
     queryFn: () => fetchAssetUrls({ data: { documentId: id } }),
+  });
+
+  const original = useQuery({
+    queryKey: ["original", id, doc.data?.model ? "ready" : "none"],
+    enabled: Boolean(doc.data?.model),
+    queryFn: () => fetchOriginal({ data: { documentId: id } }),
   });
 
   async function analyze() {
@@ -158,14 +170,20 @@ function Workspace() {
     }
   }
 
-  async function download() {
-    setBusy("export");
+  async function download(kind: "docx" | "pdf") {
+    setBusy(kind);
     try {
-      const result = await runExport({ data: { documentId: id } });
+      const result =
+        kind === "pdf"
+          ? await runExportPdf({ data: { documentId: id } })
+          : await runExport({ data: { documentId: id } });
       const bytes = Uint8Array.from(atob(result.base64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(
         new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          type:
+            kind === "pdf"
+              ? "application/pdf"
+              : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         }),
       );
       const link = document.createElement("a");
