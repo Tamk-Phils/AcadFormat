@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DocumentPreview } from "@/components/workspace/DocumentPreview";
+import { OriginalPreview } from "@/components/workspace/OriginalPreview";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +23,17 @@ import { Progress } from "@/components/ui/progress";
 import {
   analyzeDocument,
   exportDocx,
+  exportPdf,
   formatDocument,
   getAssetUrls,
+  getOriginalDocument,
 } from "@/lib/acadformat.functions";
 import {
-  ACADEMIC_LEVELS,
+  ACADEMIC_LEVEL_NAMES,
   DOCUMENT_TYPES,
   UNIVERSITIES,
   resolveConfig,
+  workLabel,
   type InstitutionSelection,
 } from "@/lib/institutions";
 import type {
@@ -70,7 +74,9 @@ function Workspace() {
   const runAnalyze = useServerFn(analyzeDocument);
   const runFormat = useServerFn(formatDocument);
   const runExport = useServerFn(exportDocx);
+  const runExportPdf = useServerFn(exportPdf);
   const fetchAssetUrls = useServerFn(getAssetUrls);
+  const fetchOriginal = useServerFn(getOriginalDocument);
   const [busy, setBusy] = useState<string | null>(null);
 
   const doc = useQuery({
@@ -109,7 +115,7 @@ function Workspace() {
     school: UNIVERSITIES[0].schools[0].name,
     department: UNIVERSITIES[0].schools[0].departments[0],
     documentType: DOCUMENT_TYPES[0],
-    level: ACADEMIC_LEVELS[0],
+    level: ACADEMIC_LEVEL_NAMES[0]!,
     configId: UNIVERSITIES[0].schools[0].configId,
   });
 
@@ -128,6 +134,12 @@ function Workspace() {
     queryKey: ["assets", id, doc.data?.final_document ? "ready" : "none"],
     enabled: Boolean(doc.data?.final_document),
     queryFn: () => fetchAssetUrls({ data: { documentId: id } }),
+  });
+
+  const original = useQuery({
+    queryKey: ["original", id, doc.data?.model ? "ready" : "none"],
+    enabled: Boolean(doc.data?.model),
+    queryFn: () => fetchOriginal({ data: { documentId: id } }),
   });
 
   async function analyze() {
@@ -158,14 +170,20 @@ function Workspace() {
     }
   }
 
-  async function download() {
-    setBusy("export");
+  async function download(kind: "docx" | "pdf") {
+    setBusy(kind);
     try {
-      const result = await runExport({ data: { documentId: id } });
+      const result =
+        kind === "pdf"
+          ? await runExportPdf({ data: { documentId: id } })
+          : await runExport({ data: { documentId: id } });
       const bytes = Uint8Array.from(atob(result.base64), (c) => c.charCodeAt(0));
       const url = URL.createObjectURL(
         new Blob([bytes], {
-          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          type:
+            kind === "pdf"
+              ? "application/pdf"
+              : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         }),
       );
       const link = document.createElement("a");
@@ -266,6 +284,25 @@ function Workspace() {
         </Card>
 
         {/* Step 2 — Review issues */}
+        {original.data && original.data.blocks.length > 0 && (
+          <Card className="mt-8 shadow-soft">
+            <CardHeader>
+              <CardTitle className="font-display text-2xl">
+                1b · Your document as uploaded
+              </CardTitle>
+              <CardDescription>
+                This is your original file, unchanged — logos, images and full text. Compare it with
+                the rebuilt version in step 4.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="doc-canvas max-h-[36rem] overflow-y-auto">
+                <OriginalPreview blocks={original.data.blocks} urls={original.data.urls} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {issues.data && issues.data.length > 0 && (
           <Card className="mt-8 shadow-soft">
             <CardHeader>
@@ -336,10 +373,16 @@ function Workspace() {
               <Picker
                 label="Academic level"
                 value={selection.level}
-                options={[...ACADEMIC_LEVELS]}
+                options={ACADEMIC_LEVEL_NAMES}
                 onChange={(value) => setSelection({ ...selection, level: value })}
               />
             </div>
+
+            <p className="text-sm text-muted-foreground">
+              Cover page will read{" "}
+              <strong>{workLabel(selection.documentType, selection.level)}</strong> for this degree
+              programme.
+            </p>
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               {config.notes.map((note) => (
@@ -364,9 +407,18 @@ function Workspace() {
                   {audit?.passed ? "final check passed" : `${audit?.findings.length} item(s) to review`}
                 </CardDescription>
               </div>
-              <Button onClick={download} disabled={busy === "export"}>
-                {busy === "export" ? "Preparing…" : "Download DOCX"}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => download("docx")} disabled={busy === "docx"}>
+                  {busy === "docx" ? "Preparing…" : "Download DOCX"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => download("pdf")}
+                  disabled={busy === "pdf"}
+                >
+                  {busy === "pdf" ? "Preparing…" : "Download PDF"}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {audit && audit.findings.length > 0 && (

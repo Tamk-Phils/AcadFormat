@@ -4,6 +4,7 @@ import { auditFinalDocument, buildFinalDocument } from "./document-build";
 import type { DocumentImage, DocumentModel, IssueDraft } from "./document-model";
 import { resolveConfig, type InstitutionSelection } from "./institutions";
 import type { ImageAsset } from "./docx-export.server";
+import { restoreVerbatimContent } from "./verbatim";
 
 /** Supabase jsonb columns are typed as Json; app types are structurally compatible. */
 const toJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as never;
@@ -86,7 +87,12 @@ export const analyzeDocument = createServerFn({ method: "POST" })
         );
       }
 
-      const analysedModel: DocumentModel = { ...analysis.model, images: uploadedImages };
+      const restored = restoreVerbatimContent(analysis.model, extracted.text);
+      const analysedModel: DocumentModel = {
+        ...restored,
+        images: uploadedImages,
+        original: extracted.original,
+      };
 
       await supabase
         .from("documents")
@@ -179,6 +185,58 @@ export const exportDocx = createServerFn({ method: "POST" })
       images,
     );
     return { base64, fileName: row.file_name.replace(/\.(docx|pdf)$/i, "") + " — formatted.docx" };
+  });
+
+export const exportPdf = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { documentId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const { data: row, error } = await context.supabase
+      .from("documents")
+      .select("file_name, final_document, institution")
+      .eq("id", data.documentId)
+      .single();
+    if (error || !row?.final_document) throw new Error("Format the document before exporting.");
+
+    const selection = row.institution as unknown as InstitutionSelection;
+    const { buildPdf } = await import("./pdf-export.server");
+    const final = row.final_document as unknown as { images?: DocumentImage[] };
+    const images = new Map<string, { data: Uint8Array; contentType: string }>();
+    for (const image of final.images ?? []) {
+      const file = await context.supabase.storage.from("documents").download(image.path);
+      if (file.error || !file.data) continue;
+      images.set(image.id, {
+        data: new Uint8Array(await file.data.arrayBuffer()),
+        contentType: image.contentType,
+      });
+    }
+    const base64 = await buildPdf(
+      row.final_document as never,
+      resolveConfig(selection ?? { configId: "" }),
+      images,
+    );
+    return { base64, fileName: row.file_name.replace(/\.(docx|pdf)$/i, "") + " — formatted.pdf" };
+  });
+
+/** Signed URLs for the images of the uploaded (pre-formatting) document. */
+export const getOriginalDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { documentId: string }) => data)
+  .handler(async ({ data, context }) => {
+    const { data: row } = await context.supabase
+      .from("documents")
+      .select("model")
+      .eq("id", data.documentId)
+      .single();
+    const model = row?.model as unknown as DocumentModel | null;
+    const urls: Record<string, string> = {};
+    for (const image of model?.images ?? []) {
+      const signed = await context.supabase.storage
+        .from("documents")
+        .createSignedUrl(image.path, 60 * 60);
+      if (signed.data?.signedUrl) urls[image.id] = signed.data.signedUrl;
+    }
+    return { blocks: model?.original ?? [], urls };
   });
 
 export const getAssetUrls = createServerFn({ method: "POST" })
