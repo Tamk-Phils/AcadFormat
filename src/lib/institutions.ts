@@ -223,6 +223,61 @@ export const DOCUMENT_TYPES = [
 
 export const ACADEMIC_LEVELS = ["Bachelor's (BSc)", "Master's (MSc)", "PhD"] as const;
 
+export type DegreeTier = "undergraduate" | "masters" | "doctorate";
+
+export interface DegreeProgram {
+  name: string;
+  tier: DegreeTier;
+}
+
+/** Undergraduate, master's and doctoral programmes offered across partner schools. */
+export const DEGREE_PROGRAMS: DegreeProgram[] = [
+  { name: "HND — Higher National Diploma", tier: "undergraduate" },
+  { name: "BSc — Bachelor of Science", tier: "undergraduate" },
+  { name: "BTech — Bachelor of Technology", tier: "undergraduate" },
+  { name: "BEng — Bachelor of Engineering", tier: "undergraduate" },
+  { name: "BA — Bachelor of Arts", tier: "undergraduate" },
+  { name: "BEd — Bachelor of Education", tier: "undergraduate" },
+  { name: "BBA — Bachelor of Business Administration", tier: "undergraduate" },
+  { name: "LLB — Bachelor of Laws", tier: "undergraduate" },
+  { name: "DIPES I / DIPET I", tier: "undergraduate" },
+  { name: "MSc — Master of Science", tier: "masters" },
+  { name: "MTech — Master of Technology", tier: "masters" },
+  { name: "MEng — Master of Engineering", tier: "masters" },
+  { name: "MA — Master of Arts", tier: "masters" },
+  { name: "MBA — Master of Business Administration", tier: "masters" },
+  { name: "MEd — Master of Education", tier: "masters" },
+  { name: "MPhil — Master of Philosophy", tier: "masters" },
+  { name: "LLM — Master of Laws", tier: "masters" },
+  { name: "DIPES II / DIPET II", tier: "masters" },
+  { name: "PhD — Doctor of Philosophy", tier: "doctorate" },
+  { name: "DBA — Doctor of Business Administration", tier: "doctorate" },
+];
+
+export const ACADEMIC_LEVEL_NAMES = DEGREE_PROGRAMS.map((p) => p.name);
+
+export function degreeTier(level: string): DegreeTier {
+  const found = DEGREE_PROGRAMS.find((p) => p.name === level);
+  if (found) return found.tier;
+  if (/phd|doctor/i.test(level)) return "doctorate";
+  if (/^m|master/i.test(level)) return "masters";
+  return "undergraduate";
+}
+
+/**
+ * Cover-page wording: undergraduate works are a Project, master's works a
+ * Dissertation and doctoral works a Thesis — regardless of loose wording used
+ * by the author. Internship reports and assignments keep their own name.
+ */
+export function workLabel(documentType: string, level: string): string {
+  if (/internship/i.test(documentType)) return "Internship Report";
+  if (/assignment/i.test(documentType)) return "Assignment";
+  const tier = degreeTier(level);
+  if (tier === "doctorate") return "Thesis";
+  if (tier === "masters") return "Dissertation";
+  return "Project";
+}
+
 export function getConfig(configId: string): InstitutionConfig {
   if (configId === ASSIGNMENT_CONFIG.id) return ASSIGNMENT_CONFIG;
   return configId === COLTECH_CONFIG.id ? COLTECH_CONFIG : COMMON_CONFIG;
