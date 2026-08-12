@@ -73,6 +73,8 @@ export interface DocumentModel {
   appendices: { label: string; title: string; content: string }[];
   abbreviations: Abbreviation[];
   images?: DocumentImage[];
+  /** Untouched rendering of the uploaded file (before any AI restructuring). */
+  original?: OriginalBlock[];
 }
 
 export interface DocumentImage {
