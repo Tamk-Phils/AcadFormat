@@ -32,6 +32,10 @@ export interface SubSection {
   number?: string;
   title: string;
   content: string;
+  /** Verbatim first words of the section in the uploaded file (used to restore full text). */
+  startMarker?: string;
+  /** Verbatim last words of the section in the uploaded file. */
+  endMarker?: string;
 }
 
 export interface Chapter {
@@ -76,6 +80,14 @@ export interface DocumentImage {
   path: string;
   contentType: string;
   role: "logo" | "figure";
+}
+
+/** Faithful, unmodified rendering of the uploaded file, used for the "original" preview. */
+export interface OriginalBlock {
+  type: "heading" | "para" | "image" | "table";
+  text: string;
+  level?: number;
+  imageId?: string;
 }
 
 export interface Understanding {
