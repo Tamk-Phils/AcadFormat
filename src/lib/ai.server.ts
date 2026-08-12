@@ -19,7 +19,14 @@ Hard rules:
   per [IMAGE:n] marker that belongs to the main body (skip logo images at the very start of the file),
   keeping them in the same order as the markers, and set originalLabel to the marker text.
 - Abbreviations must be extracted from the actual text with their real expansions.
-- Preserve the author's own content and wording; you restructure and label, you do not rewrite research.
+- ABSOLUTE RULE — NEVER SHORTEN THE WORK. You must not summarise, paraphrase, compress, truncate,
+  or drop any sentence of the author's text. Every paragraph of the uploaded document must appear in
+  exactly one section, word for word. You only restructure, label, and renumber.
+- For every section you output, also return "startMarker" (the first 8-12 words of that section,
+  copied verbatim from the document) and "endMarker" (its last 8-12 words, verbatim). These markers
+  are used to re-attach the author's full original text, so they must be exact copies.
+- If a section is very long, still return its full content; if you truly cannot repeat it all,
+  return correct startMarker/endMarker so nothing is lost.
 
 Return STRICT JSON only, matching this shape:
 {
@@ -27,7 +34,7 @@ Return STRICT JSON only, matching this shape:
  "model": {
    "meta": {"title":"","author":"","registrationNumber":"","department":"","supervisors":[],"monthYear":"","keywords":[]},
    "preliminary": [{"type":"ABSTRACT","title":"Abstract","content":"","present":true}],
-   "chapters": [{"number":1,"title":"","type":"INTRODUCTION","intro":"","sections":[{"title":"","content":""}],
+   "chapters": [{"number":1,"title":"","type":"INTRODUCTION","intro":"","sections":[{"title":"","content":"","startMarker":"","endMarker":""}],
                  "figures":[{"id":"f1","chapter":1,"caption":"","originalLabel":"","kind":"","requiresUserReview":false,"confidence":90}],
                  "tables":[{"id":"t1","chapter":1,"title":"","originalLabel":"","requiresUserReview":false,"confidence":90}]}],
    "references": [],
@@ -39,8 +46,7 @@ Return STRICT JSON only, matching this shape:
              "location":"","problem":"","explanation":"","suggestion":"","confidence":0,"severity":"low|medium|high"}]
 }
 health.figures/tables/abbreviations/references/crossReferences are COUNTS of issues (abbreviations = count detected).
-structure and formatting are percentage scores 0-100. Keep section content faithful but you may omit
-extremely long verbatim passages beyond what is needed to preserve the work's text.`;
+structure and formatting are percentage scores 0-100. Section content must remain complete and verbatim.`;
 
 export async function analyzeWithAI(input: {
   text: string;
