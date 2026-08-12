@@ -354,10 +354,16 @@ function Workspace() {
               <Picker
                 label="Academic level"
                 value={selection.level}
-                options={[...ACADEMIC_LEVELS]}
+                options={ACADEMIC_LEVEL_NAMES}
                 onChange={(value) => setSelection({ ...selection, level: value })}
               />
             </div>
+
+            <p className="text-sm text-muted-foreground">
+              Cover page will read{" "}
+              <strong>{workLabel(selection.documentType, selection.level)}</strong> for this degree
+              programme.
+            </p>
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               {config.notes.map((note) => (
@@ -382,9 +388,18 @@ function Workspace() {
                   {audit?.passed ? "final check passed" : `${audit?.findings.length} item(s) to review`}
                 </CardDescription>
               </div>
-              <Button onClick={download} disabled={busy === "export"}>
-                {busy === "export" ? "Preparing…" : "Download DOCX"}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => download("docx")} disabled={busy === "docx"}>
+                  {busy === "docx" ? "Preparing…" : "Download DOCX"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => download("pdf")}
+                  disabled={busy === "pdf"}
+                >
+                  {busy === "pdf" ? "Preparing…" : "Download PDF"}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {audit && audit.findings.length > 0 && (
