@@ -284,6 +284,25 @@ function Workspace() {
         </Card>
 
         {/* Step 2 — Review issues */}
+        {original.data && original.data.blocks.length > 0 && (
+          <Card className="mt-8 shadow-soft">
+            <CardHeader>
+              <CardTitle className="font-display text-2xl">
+                1b · Your document as uploaded
+              </CardTitle>
+              <CardDescription>
+                This is your original file, unchanged — logos, images and full text. Compare it with
+                the rebuilt version in step 4.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="doc-canvas max-h-[36rem] overflow-y-auto">
+                <OriginalPreview blocks={original.data.blocks} urls={original.data.urls} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {issues.data && issues.data.length > 0 && (
           <Card className="mt-8 shadow-soft">
             <CardHeader>
