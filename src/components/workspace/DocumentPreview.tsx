@@ -84,7 +84,14 @@ export function DocumentPreview({
               if (block.type === "listline") {
                 const [left, right] = block.text.split("\t");
                 return (
-                  <p key={index} className="doc-listline">
+                  <p
+                    key={index}
+                    className="doc-listline"
+                    style={{
+                      paddingLeft: `${((block.level ?? 1) - 1) * 1.25}rem`,
+                      fontWeight: block.bold ? 700 : undefined,
+                    }}
+                  >
                     <span>{left}</span>
                     <span className="doc-dots" />
                     <span>{right}</span>
