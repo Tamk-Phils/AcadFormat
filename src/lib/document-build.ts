@@ -44,11 +44,38 @@ function roman(n: number): string {
   return out;
 }
 
+const CHAPTER_PREFIX =
+  /^\s*chapter\s+(?:[ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[:.\-–—]?\s*/i;
+const NUMBER_PREFIX = /^\s*\d+(?:\.\d+)*[.)]?\s+/;
+
+/**
+ * Removes numbering the author already typed ("1.1 Background", "CHAPTER TWO:")
+ * so the rebuilt document never shows a duplicated label such as "1.1 1.1".
+ */
+export function cleanTitle(raw: string): string {
+  let title = (raw || "").trim();
+  let previous = "";
+  while (title !== previous) {
+    previous = title;
+    title = title.replace(CHAPTER_PREFIX, "").replace(NUMBER_PREFIX, "").trim();
+  }
+  return title || (raw || "").trim();
+}
+
+/** A short line that is only a chapter/section heading repeated inside body text. */
+function isStrayHeading(line: string): boolean {
+  const text = line.trim();
+  if (text.length > 80) return false;
+  if (CHAPTER_PREFIX.test(text)) return true;
+  return /^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text);
+}
+
 function paragraphs(text: string): string[] {
   return (text || "")
     .split(/\n\s*\n|\n/)
     .map((p) => p.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((p) => !isStrayHeading(p));
 }
 
 /** Split blocks into page-sized chunks using an approximate character budget. */
