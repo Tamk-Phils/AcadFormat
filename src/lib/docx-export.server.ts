@@ -135,16 +135,21 @@ function renderPage(
       case "listline": {
         const [left, right] = block.text.split("\t");
         const indent = ((block.level ?? 1) - 1) * 360;
+        const bold = block.bold === true;
         paragraphs.push(
           new Paragraph({
             spacing: { line: 240, after: 60 },
-            indent: indent > 0 ? { left: indent } : undefined,
-            tabStops: right
-              ? [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX, leader: "dot" }]
-              : undefined,
+            ...(indent > 0 ? { indent: { left: indent } } : {}),
+            ...(right
+              ? {
+                  tabStops: [
+                    { type: TabStopType.RIGHT, position: TabStopPosition.MAX, leader: "dot" as const },
+                  ],
+                }
+              : {}),
             children: [
-              new TextRun({ ...common, text: left ?? "", bold: block.bold }),
-              ...(right ? [new TextRun({ ...common, text: `\t${right}`, bold: block.bold })] : []),
+              new TextRun({ ...common, text: left ?? "", bold }),
+              ...(right ? [new TextRun({ ...common, text: `\t${right}`, bold })] : []),
             ],
           }),
         );
