@@ -8,6 +8,8 @@ import {
   PageBreak,
   PageNumber,
   Paragraph,
+  TabStopPosition,
+  TabStopType,
   TextRun,
   SectionType,
 } from "docx";
@@ -132,11 +134,17 @@ function renderPage(
         break;
       case "listline": {
         const [left, right] = block.text.split("\t");
+        const indent = ((block.level ?? 1) - 1) * 360;
         paragraphs.push(
           new Paragraph({
             spacing: { line: 240, after: 60 },
+            indent: indent > 0 ? { left: indent } : undefined,
+            tabStops: right
+              ? [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX, leader: "dot" }]
+              : undefined,
             children: [
-              new TextRun({ ...common, text: right ? `${left}  ${".".repeat(6)}  ${right}` : left ?? "" }),
+              new TextRun({ ...common, text: left ?? "", bold: block.bold }),
+              ...(right ? [new TextRun({ ...common, text: `\t${right}`, bold: block.bold })] : []),
             ],
           }),
         );
