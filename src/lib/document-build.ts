@@ -324,7 +324,9 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         { type: "heading1", text: "TABLE OF CONTENTS" },
         ...toc.map((entry) => ({
           type: "listline" as const,
-          text: `${entry.level === 1 ? "" : "    "}${entry.label ? `${entry.label}: ` : ""}${entry.text}\t${entry.page}`,
+          level: entry.level,
+          bold: entry.level === 1,
+          text: `${entry.label ? `${entry.label}: ` : ""}${entry.text}\t${entry.page}`,
         })),
       ], "preliminary");
       continue;
