@@ -216,6 +216,7 @@ export const ASSIGNMENT_CONFIG: InstitutionConfig = {
   tableNumbering: "sequential",
   preliminaryNumbering: "none",
   coverPageNumbered: false,
+  coverLogoCount: 1,
   preliminaryOrder: ["COVER_PAGE", "TABLE_OF_CONTENTS"],
   bodyOutline: ["Introduction", "Body / Answers", "Conclusion"],
   backMatter: ["REFERENCES"],
