@@ -103,6 +103,16 @@ function chunkBlocks(blocks: Block[]): Block[][] {
     used += weight;
   }
   if (current.length > 0) pages.push(current);
+  // Never leave a heading orphaned as the last line of a page.
+  for (let i = 0; i < pages.length - 1; i += 1) {
+    const page = pages[i]!;
+    while (
+      page.length > 1 &&
+      (page[page.length - 1]!.type === "heading1" || page[page.length - 1]!.type === "heading2")
+    ) {
+      pages[i + 1]!.unshift(page.pop()!);
+    }
+  }
   return pages.length > 0 ? pages : [[]];
 }
 
