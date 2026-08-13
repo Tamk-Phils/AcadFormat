@@ -145,16 +145,18 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   model.chapters.forEach((chapter, chapterIndex) => {
     const chapterNumber = chapterIndex + 1;
+    const chapterTitle = cleanTitle(chapter.title);
     const blocks: Block[] = [
-      { type: "heading1", text: `CHAPTER ${chapterNumber}: ${chapter.title.toUpperCase()}` },
+      { type: "heading1", text: `CHAPTER ${chapterNumber}: ${chapterTitle.toUpperCase()}` },
     ];
     paragraphs(chapter.intro || "").forEach((p) => blocks.push({ type: "para", text: p }));
 
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
     chapter.sections.forEach((section, sectionIndex) => {
       const number = `${chapterNumber}.${sectionIndex + 1}`;
-      sectionPageMarks.push({ title: `${number} ${section.title}`, blockIndex: blocks.length });
-      blocks.push({ type: "heading2", text: `${number} ${section.title}` });
+      const sectionTitle = cleanTitle(section.title);
+      sectionPageMarks.push({ title: `${number} ${sectionTitle}`, blockIndex: blocks.length });
+      blocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
       paragraphs(section.content).forEach((p) => blocks.push({ type: "para", text: p }));
     });
 
@@ -200,7 +202,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
     toc.push({
       label: `CHAPTER ${chapterNumber}`,
-      text: chapter.title.toUpperCase(),
+      text: chapterTitle.toUpperCase(),
       page: String(startPage),
       level: 1,
     });
