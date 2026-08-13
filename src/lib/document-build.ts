@@ -245,7 +245,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   if (model.appendices.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "APPENDICES" }];
     model.appendices.forEach((appendix) => {
-      blocks.push({ type: "heading2", text: `${appendix.label}: ${appendix.title}` });
+      blocks.push({ type: "heading2", text: `${appendix.label}: ${cleanTitle(appendix.title)}` });
       paragraphs(appendix.content).forEach((p) => blocks.push({ type: "para", text: p }));
     });
     const page = pushBody("Appendices", blocks, "back");
@@ -275,7 +275,15 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   const meta = model.meta;
   const coverBlocks: Block[] = [
     ...(logoImages.length > 0
-      ? [{ type: "logos" as const, text: "", imageIds: logoImages.map((image) => image.id) }]
+      ? [
+          {
+            type: "logos" as const,
+            text: "",
+            imageIds: logoImages
+              .slice(0, Math.max(1, config.coverLogoCount))
+              .map((image) => image.id),
+          },
+        ]
       : []),
     { type: "center", text: "REPUBLIC OF CAMEROON" },
     { type: "center", text: "Peace – Work – Fatherland" },
