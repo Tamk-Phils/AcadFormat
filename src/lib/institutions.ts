@@ -417,6 +417,8 @@ export function workLabel(documentType: string, level: string): string {
 
 export function getConfig(configId: string): InstitutionConfig {
   if (configId === ASSIGNMENT_CONFIG.id) return ASSIGNMENT_CONFIG;
+  if (configId === INTERNSHIP_CONFIG.id) return INTERNSHIP_CONFIG;
+  if (configId === COLTECH_INTERNSHIP_CONFIG.id) return COLTECH_INTERNSHIP_CONFIG;
   return configId === COLTECH_CONFIG.id ? COLTECH_CONFIG : COMMON_CONFIG;
 }
 
@@ -429,5 +431,9 @@ export function resolveConfig(selection: {
   documentType?: string;
 }): InstitutionConfig {
   if (selection.documentType === "Assignment") return ASSIGNMENT_CONFIG;
+  if (selection.documentType === "Internship Report")
+    return selection.configId === COLTECH_CONFIG.id
+      ? COLTECH_INTERNSHIP_CONFIG
+      : INTERNSHIP_CONFIG;
   return getConfig(selection.configId);
 }
