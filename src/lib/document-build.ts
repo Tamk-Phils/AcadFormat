@@ -44,11 +44,38 @@ function roman(n: number): string {
   return out;
 }
 
+const CHAPTER_PREFIX =
+  /^\s*chapter\s+(?:[ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[:.\-–—]?\s*/i;
+const NUMBER_PREFIX = /^\s*\d+(?:\.\d+)*[.)]?\s+/;
+
+/**
+ * Removes numbering the author already typed ("1.1 Background", "CHAPTER TWO:")
+ * so the rebuilt document never shows a duplicated label such as "1.1 1.1".
+ */
+export function cleanTitle(raw: string): string {
+  let title = (raw || "").trim();
+  let previous = "";
+  while (title !== previous) {
+    previous = title;
+    title = title.replace(CHAPTER_PREFIX, "").replace(NUMBER_PREFIX, "").trim();
+  }
+  return title || (raw || "").trim();
+}
+
+/** A short line that is only a chapter/section heading repeated inside body text. */
+function isStrayHeading(line: string): boolean {
+  const text = line.trim();
+  if (text.length > 80) return false;
+  if (CHAPTER_PREFIX.test(text)) return true;
+  return /^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text);
+}
+
 function paragraphs(text: string): string[] {
   return (text || "")
     .split(/\n\s*\n|\n/)
     .map((p) => p.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((p) => !isStrayHeading(p));
 }
 
 /** Split blocks into page-sized chunks using an approximate character budget. */
@@ -76,6 +103,16 @@ function chunkBlocks(blocks: Block[]): Block[][] {
     used += weight;
   }
   if (current.length > 0) pages.push(current);
+  // Never leave a heading orphaned as the last line of a page.
+  for (let i = 0; i < pages.length - 1; i += 1) {
+    const page = pages[i]!;
+    while (
+      page.length > 1 &&
+      (page[page.length - 1]!.type === "heading1" || page[page.length - 1]!.type === "heading2")
+    ) {
+      pages[i + 1]!.unshift(page.pop()!);
+    }
+  }
   return pages.length > 0 ? pages : [[]];
 }
 
@@ -118,16 +155,18 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   model.chapters.forEach((chapter, chapterIndex) => {
     const chapterNumber = chapterIndex + 1;
+    const chapterTitle = cleanTitle(chapter.title);
     const blocks: Block[] = [
-      { type: "heading1", text: `CHAPTER ${chapterNumber}: ${chapter.title.toUpperCase()}` },
+      { type: "heading1", text: `CHAPTER ${chapterNumber}: ${chapterTitle.toUpperCase()}` },
     ];
     paragraphs(chapter.intro || "").forEach((p) => blocks.push({ type: "para", text: p }));
 
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
     chapter.sections.forEach((section, sectionIndex) => {
       const number = `${chapterNumber}.${sectionIndex + 1}`;
-      sectionPageMarks.push({ title: `${number} ${section.title}`, blockIndex: blocks.length });
-      blocks.push({ type: "heading2", text: `${number} ${section.title}` });
+      const sectionTitle = cleanTitle(section.title);
+      sectionPageMarks.push({ title: `${number} ${sectionTitle}`, blockIndex: blocks.length });
+      blocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
       paragraphs(section.content).forEach((p) => blocks.push({ type: "para", text: p }));
     });
 
@@ -173,7 +212,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
     toc.push({
       label: `CHAPTER ${chapterNumber}`,
-      text: chapter.title.toUpperCase(),
+      text: chapterTitle.toUpperCase(),
       page: String(startPage),
       level: 1,
     });
@@ -206,7 +245,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   if (model.appendices.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "APPENDICES" }];
     model.appendices.forEach((appendix) => {
-      blocks.push({ type: "heading2", text: `${appendix.label}: ${appendix.title}` });
+      blocks.push({ type: "heading2", text: `${appendix.label}: ${cleanTitle(appendix.title)}` });
       paragraphs(appendix.content).forEach((p) => blocks.push({ type: "para", text: p }));
     });
     const page = pushBody("Appendices", blocks, "back");
@@ -236,7 +275,15 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   const meta = model.meta;
   const coverBlocks: Block[] = [
     ...(logoImages.length > 0
-      ? [{ type: "logos" as const, text: "", imageIds: logoImages.map((image) => image.id) }]
+      ? [
+          {
+            type: "logos" as const,
+            text: "",
+            imageIds: logoImages
+              .slice(0, Math.max(1, config.coverLogoCount))
+              .map((image) => image.id),
+          },
+        ]
       : []),
     { type: "center", text: "REPUBLIC OF CAMEROON" },
     { type: "center", text: "Peace – Work – Fatherland" },
@@ -277,7 +324,9 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         { type: "heading1", text: "TABLE OF CONTENTS" },
         ...toc.map((entry) => ({
           type: "listline" as const,
-          text: `${entry.level === 1 ? "" : "    "}${entry.label ? `${entry.label}: ` : ""}${entry.text}\t${entry.page}`,
+          level: entry.level,
+          bold: entry.level === 1,
+          text: `${entry.label ? `${entry.label}: ` : ""}${entry.text}\t${entry.page}`,
         })),
       ], "preliminary");
       continue;

@@ -147,7 +147,11 @@ export async function buildPdf(
         write(block.text, { font: italic, size: baseSize - 1, align: "center" });
       else if (block.type === "listline") {
         const [left, right] = block.text.split("\t");
-        write(right ? `${left}  ......  ${right}` : (left ?? ""), { font: regular, size: baseSize });
+        const indent = "   ".repeat(Math.max(0, (block.level ?? 1) - 1));
+        write(right ? `${indent}${left}  ......  ${right}` : `${indent}${left ?? ""}`, {
+          font: block.bold === true ? bold : regular,
+          size: baseSize,
+        });
       } else write(block.text, { font: regular, size: baseSize });
     }
 

@@ -52,6 +52,8 @@ export interface InstitutionConfig {
   preliminaryNumbering: "roman-lower" | "none";
   bodyNumbering: "arabic";
   coverPageNumbered: boolean;
+  /** Number of institutional logos on the cover page (COLTECH uses UB + COLTECH). */
+  coverLogoCount: number;
   preliminaryOrder: SectionType[];
   bodyOutline: string[];
   backMatter: SectionType[];
@@ -74,6 +76,7 @@ export const COLTECH_CONFIG: InstitutionConfig = {
   preliminaryNumbering: "roman-lower",
   bodyNumbering: "arabic",
   coverPageNumbered: false,
+  coverLogoCount: 2,
   preliminaryOrder: [
     "COVER_PAGE",
     "TITLE_PAGE",
@@ -115,6 +118,7 @@ export const COMMON_CONFIG: InstitutionConfig = {
   source: "Shared faculty project & internship-report structure",
   lineSpacing: 1.5,
   marginsIn: { top: 1, bottom: 1, left: 1.25, right: 1 },
+  coverLogoCount: 1,
   preliminaryOrder: [
     "COVER_PAGE",
     "TITLE_PAGE",
@@ -141,6 +145,57 @@ export const COMMON_CONFIG: InstitutionConfig = {
   ],
 };
 
+/**
+ * Internship-report format (FEMS outline, shared by all schools).
+ * Only the cover page differs: COLTECH carries two logos (UB left, COLTECH
+ * right), every other school carries the single University of Bamenda logo.
+ */
+export const INTERNSHIP_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "internship-report",
+  label: "Internship Report format",
+  source: "Format and outline of an internship report (FEMS)",
+  citationStyle: "APA 6th Edition",
+  coverLogoCount: 1,
+  preliminaryOrder: [
+    "COVER_PAGE",
+    "TITLE_PAGE",
+    "CERTIFICATION",
+    "DECLARATION",
+    "ACKNOWLEDGEMENTS",
+    "DEDICATION",
+    "ABSTRACT",
+    "TABLE_OF_CONTENTS",
+    "LIST_OF_ABBREVIATIONS",
+    "LIST_OF_TABLES",
+    "LIST_OF_FIGURES",
+  ],
+  bodyOutline: [
+    "Introduction",
+    "Overview (Description) of the Organization",
+    "Internship Activities",
+    "Situational / Critical Appraisal",
+    "Conclusion and Recommendation",
+  ],
+  backMatter: ["REFERENCES", "APPENDICES"],
+  notes: [
+    "Times New Roman 12pt, 1.5 line spacing, text justified left and right.",
+    "All headings bold; only major headings in capital letters.",
+    "Minimum of 25 pages; APA 6th Edition citation and referencing.",
+  ],
+};
+
+export const COLTECH_INTERNSHIP_CONFIG: InstitutionConfig = {
+  ...INTERNSHIP_CONFIG,
+  id: "coltech-internship-report",
+  label: "COLTECH — Internship Report",
+  coverLogoCount: 2,
+  notes: [
+    ...INTERNSHIP_CONFIG.notes,
+    "COLTECH cover page carries two logos: University of Bamenda on the left and COLTECH on the right.",
+  ],
+};
+
 export interface InstitutionSelection {
   university: string;
   school: string;
@@ -161,6 +216,7 @@ export const ASSIGNMENT_CONFIG: InstitutionConfig = {
   tableNumbering: "sequential",
   preliminaryNumbering: "none",
   coverPageNumbered: false,
+  coverLogoCount: 1,
   preliminaryOrder: ["COVER_PAGE", "TABLE_OF_CONTENTS"],
   bodyOutline: ["Introduction", "Body / Answers", "Conclusion"],
   backMatter: ["REFERENCES"],
@@ -198,6 +254,87 @@ export const UNIVERSITIES = [
         name: "Higher Technical Teacher Training College (HTTTC)",
         configId: COMMON_CONFIG.id,
         departments: ["Computer Science", "Electrical Engineering", "Civil Engineering"],
+      },
+      {
+        name: "National Higher Polytechnic Institute (NAHPI)",
+        configId: COMMON_CONFIG.id,
+        departments: [
+          "Computer Engineering",
+          "Electrical and Electronic Engineering",
+          "Civil Engineering",
+          "Mechanical Engineering",
+          "Petroleum Engineering",
+          "Chemical Engineering",
+          "Biomedical Engineering",
+        ],
+      },
+      {
+        name: "Higher Teacher Training College (HTTC) Bambili",
+        configId: COMMON_CONFIG.id,
+        departments: [
+          "Computer Science",
+          "Mathematics",
+          "Physics",
+          "Chemistry",
+          "Biology",
+          "English Modern Letters",
+          "French",
+          "History",
+          "Geography",
+          "Educational Psychology",
+        ],
+      },
+      {
+        name: "Faculty of Economics and Management Sciences (FEMS)",
+        configId: COMMON_CONFIG.id,
+        departments: [
+          "Accountancy",
+          "Banking and Finance",
+          "Economics",
+          "Management",
+          "Marketing",
+          "Public Administration",
+        ],
+      },
+      {
+        name: "Faculty of Law and Political Science (FLPS)",
+        configId: COMMON_CONFIG.id,
+        departments: ["English Law", "French Law", "Political Science", "International Relations"],
+      },
+      {
+        name: "Faculty of Arts (FA)",
+        configId: COMMON_CONFIG.id,
+        departments: [
+          "English",
+          "French",
+          "Linguistics",
+          "History",
+          "Geography",
+          "Journalism and Mass Communication",
+          "Performing and Visual Arts",
+        ],
+      },
+      {
+        name: "Faculty of Health Sciences (FHS)",
+        configId: COMMON_CONFIG.id,
+        departments: [
+          "Medicine",
+          "Nursing",
+          "Midwifery",
+          "Medical Laboratory Sciences",
+          "Public Health",
+          "Pharmacy",
+        ],
+      },
+      {
+        name: "Higher Institute of Transport and Logistics (HITL)",
+        configId: COMMON_CONFIG.id,
+        departments: ["Transport and Logistics", "Supply Chain Management"],
+      },
+      {
+        name: "College of Agriculture and Veterinary Medicine (COLTECH-AVM)",
+        configId: COMMON_CONFIG.id,
+        departments: ["Animal Production", "Crop Production", "Veterinary Medicine"],
       },
     ],
   },
@@ -280,6 +417,8 @@ export function workLabel(documentType: string, level: string): string {
 
 export function getConfig(configId: string): InstitutionConfig {
   if (configId === ASSIGNMENT_CONFIG.id) return ASSIGNMENT_CONFIG;
+  if (configId === INTERNSHIP_CONFIG.id) return INTERNSHIP_CONFIG;
+  if (configId === COLTECH_INTERNSHIP_CONFIG.id) return COLTECH_INTERNSHIP_CONFIG;
   return configId === COLTECH_CONFIG.id ? COLTECH_CONFIG : COMMON_CONFIG;
 }
 
@@ -292,5 +431,9 @@ export function resolveConfig(selection: {
   documentType?: string;
 }): InstitutionConfig {
   if (selection.documentType === "Assignment") return ASSIGNMENT_CONFIG;
+  if (selection.documentType === "Internship Report")
+    return selection.configId === COLTECH_CONFIG.id
+      ? COLTECH_INTERNSHIP_CONFIG
+      : INTERNSHIP_CONFIG;
   return getConfig(selection.configId);
 }

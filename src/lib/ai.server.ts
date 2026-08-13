@@ -19,6 +19,12 @@ Hard rules:
   per [IMAGE:n] marker that belongs to the main body (skip logo images at the very start of the file),
   keeping them in the same order as the markers, and set originalLabel to the marker text.
 - Abbreviations must be extracted from the actual text with their real expansions.
+- Titles must be returned WITHOUT their numbering: chapter titles carry no "CHAPTER TWO"/"2." prefix
+  and section titles carry no "2.1"/"2.1.1" prefix. AcadFormat renumbers everything itself, so any
+  number you leave in a title becomes a visible duplicate ("2.1 2.1 Background").
+- Never repeat a chapter or section heading inside another section's content. A heading line that the
+  author typed at the end of a page belongs to the next chapter, not to the previous one's text.
+- Table titles must be the real caption of the table, and the table's first row is its header row.
 - ABSOLUTE RULE — NEVER SHORTEN THE WORK. You must not summarise, paraphrase, compress, truncate,
   or drop any sentence of the author's text. Every paragraph of the uploaded document must appear in
   exactly one section, word for word. You only restructure, label, and renumber.
