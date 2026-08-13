@@ -118,6 +118,7 @@ export const COMMON_CONFIG: InstitutionConfig = {
   source: "Shared faculty project & internship-report structure",
   lineSpacing: 1.5,
   marginsIn: { top: 1, bottom: 1, left: 1.25, right: 1 },
+  coverLogoCount: 1,
   preliminaryOrder: [
     "COVER_PAGE",
     "TITLE_PAGE",
@@ -141,6 +142,57 @@ export const COMMON_CONFIG: InstitutionConfig = {
   backMatter: ["REFERENCES", "APPENDICES"],
   notes: [
     "Shared configuration inherited by compatible project and internship reports.",
+  ],
+};
+
+/**
+ * Internship-report format (FEMS outline, shared by all schools).
+ * Only the cover page differs: COLTECH carries two logos (UB left, COLTECH
+ * right), every other school carries the single University of Bamenda logo.
+ */
+export const INTERNSHIP_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "internship-report",
+  label: "Internship Report format",
+  source: "Format and outline of an internship report (FEMS)",
+  citationStyle: "APA 6th Edition",
+  coverLogoCount: 1,
+  preliminaryOrder: [
+    "COVER_PAGE",
+    "TITLE_PAGE",
+    "CERTIFICATION",
+    "DECLARATION",
+    "ACKNOWLEDGEMENTS",
+    "DEDICATION",
+    "ABSTRACT",
+    "TABLE_OF_CONTENTS",
+    "LIST_OF_ABBREVIATIONS",
+    "LIST_OF_TABLES",
+    "LIST_OF_FIGURES",
+  ],
+  bodyOutline: [
+    "Introduction",
+    "Overview (Description) of the Organization",
+    "Internship Activities",
+    "Situational / Critical Appraisal",
+    "Conclusion and Recommendation",
+  ],
+  backMatter: ["REFERENCES", "APPENDICES"],
+  notes: [
+    "Times New Roman 12pt, 1.5 line spacing, text justified left and right.",
+    "All headings bold; only major headings in capital letters.",
+    "Minimum of 25 pages; APA 6th Edition citation and referencing.",
+  ],
+};
+
+export const COLTECH_INTERNSHIP_CONFIG: InstitutionConfig = {
+  ...INTERNSHIP_CONFIG,
+  id: "coltech-internship-report",
+  label: "COLTECH — Internship Report",
+  coverLogoCount: 2,
+  notes: [
+    ...INTERNSHIP_CONFIG.notes,
+    "COLTECH cover page carries two logos: University of Bamenda on the left and COLTECH on the right.",
   ],
 };
 
