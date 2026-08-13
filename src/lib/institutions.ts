@@ -52,6 +52,8 @@ export interface InstitutionConfig {
   preliminaryNumbering: "roman-lower" | "none";
   bodyNumbering: "arabic";
   coverPageNumbered: boolean;
+  /** Number of institutional logos on the cover page (COLTECH uses UB + COLTECH). */
+  coverLogoCount: number;
   preliminaryOrder: SectionType[];
   bodyOutline: string[];
   backMatter: SectionType[];
@@ -74,6 +76,7 @@ export const COLTECH_CONFIG: InstitutionConfig = {
   preliminaryNumbering: "roman-lower",
   bodyNumbering: "arabic",
   coverPageNumbered: false,
+  coverLogoCount: 2,
   preliminaryOrder: [
     "COVER_PAGE",
     "TITLE_PAGE",
