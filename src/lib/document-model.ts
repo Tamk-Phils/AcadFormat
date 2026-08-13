@@ -151,6 +151,10 @@ export interface Block {
   text: string;
   imageId?: string;
   imageIds?: string[];
+  /** Indentation level for table-of-contents lines (1 = chapter, 2 = section). */
+  level?: number;
+  /** Renders the line in bold (chapter entries, table headers). */
+  bold?: boolean;
 }
 
 export interface RenderedPage {
