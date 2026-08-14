@@ -257,6 +257,16 @@ function chunkBlocks(blocks: Block[]): Block[][] {
   return pages.length > 0 ? pages : [[]];
 }
 
+function getTOCLevel(text: string): number {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^(\d+(?:\.\d+)*)\b/);
+  if (match) {
+    const dots = (match[1].match(/\./g) || []).length;
+    return Math.min(3, dots + 1);
+  }
+  return 2;
+}
+
 export interface BuildInput {
   model: DocumentModel;
   config: InstitutionConfig;
@@ -425,9 +435,16 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       level: 1,
     });
 
-    updatedSectionPageMarks.forEach((mark) =>
-      toc.push({ label: "", text: mark.title, page: pageOfBlock(mark.blockIndex), level: 2 }),
-    );
+    blocks.forEach((block, blockIdx) => {
+      if (block.type === "heading2") {
+        toc.push({
+          label: "",
+          text: block.text,
+          page: pageOfBlock(blockIdx),
+          level: Math.min(3, getTOCLevel(block.text)),
+        });
+      }
+    });
 
     figureMarks.forEach((mark) =>
       listOfFigures.push({
