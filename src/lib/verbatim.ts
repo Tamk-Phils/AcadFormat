@@ -60,7 +60,54 @@ export function restoreVerbatimContent(model: DocumentModel, sourceText: string)
     const endNormalized = i + 1 < anchors.length ? anchors[i + 1]!.start : normalized.length;
     const from = map[anchor.start] ?? 0;
     const to = map[Math.min(endNormalized, map.length - 1)] ?? sourceText.length;
-    const slice = sourceText.slice(from, to).trim();
+    let slice = sourceText.slice(from, to).trim();
+
+    // Trim trailing header lines belonging to the next section/chapter
+    if (i + 1 < anchors.length) {
+      const nextAnchor = anchors[i + 1]!;
+      const nextCh = next.chapters[nextAnchor.chapter];
+      const nextTitles: string[] = [];
+      let nextChapterNum: number | undefined;
+
+      if (nextCh) {
+        nextChapterNum = nextCh.number;
+        if (nextCh.title) nextTitles.push(nextCh.title);
+        const nextSec = nextCh.sections[nextAnchor.section];
+        if (nextSec && nextSec.title) nextTitles.push(nextSec.title);
+      }
+
+      const lines = slice.split("\n");
+      let trimCount = 0;
+      for (let j = lines.length - 1; j >= 0; j -= 1) {
+        const line = lines[j]!;
+        const normLine = line.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+        const isEmpty = !normLine;
+        const isPageNumber = /^\d+$/.test(normLine);
+        const isChapterKeyword =
+          nextChapterNum !== undefined &&
+          (normLine === `chapter${nextChapterNum}` || normLine === `chapter`);
+        let matchesNextTitle = false;
+        for (const title of nextTitles) {
+          const normTitle = title.toLowerCase().replace(/[^a-z0-9]/g, "");
+          if (normTitle && (normLine.includes(normTitle) || normTitle.includes(normLine))) {
+            matchesNextTitle = true;
+            break;
+          }
+        }
+
+        if (isEmpty || isPageNumber || isChapterKeyword || matchesNextTitle) {
+          trimCount += 1;
+        } else {
+          break; // Stop trimming when we hit actual content
+        }
+      }
+
+      if (trimCount > 0) {
+        slice = lines.slice(0, lines.length - trimCount).join("\n").trim();
+      }
+    }
+
     const section = next.chapters[anchor.chapter]?.sections[anchor.section];
     if (!section) return;
     // Only replace when the original text is richer than what the model returned.
