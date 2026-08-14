@@ -122,12 +122,21 @@ function isOriginalSectionTitle(line: string, chapter?: any): boolean {
   return false;
 }
 
+const LIST_ITEM_REGEX = /^\s*(?:[-*•+]|\d+\.|\w\))\s+/;
+
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
   const blocks: Block[] = [];
   const lines = content.split("\n");
 
   let inTable = false;
   let tableLines: string[] = [];
+  let pendingPara: string[] = [];
+
+  const flushPara = () => {
+    if (pendingPara.length === 0) return;
+    blocks.push({ type: "para", text: pendingPara.join(" ") });
+    pendingPara = [];
+  };
 
   const flushTable = () => {
     if (tableLines.length === 0) return;
@@ -168,12 +177,14 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!.trim();
     if (!line) {
+      flushPara();
       if (inTable) flushTable();
       continue;
     }
 
     const imageMatch = line.match(/^\[IMAGE:(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i);
     if (imageMatch) {
+      flushPara();
       if (inTable) flushTable();
       const imageIndex = imageMatch[1];
       const imageId = imageIndex !== undefined ? `img-${imageIndex}` : undefined;
@@ -193,26 +204,36 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       (hasPipes && i + 1 < lines.length && /^[:\|\-\s]+$/.test(lines[i+1]!.trim()));
 
     if (isTableRow) {
+      flushPara();
       inTable = true;
       tableLines.push(lines[i]!);
     } else {
       if (inTable) flushTable();
 
       if (isStrayHeading(line)) {
+        flushPara();
         if (isOriginalSectionTitle(line, chapter)) {
           continue;
         }
         blocks.push({ type: "heading2", text: line });
       } else if (isOriginalCaption(line, chapter)) {
+        flushPara();
         continue;
       } else if (isOriginalSectionTitle(line, chapter)) {
+        flushPara();
         continue;
       } else {
-        blocks.push({ type: "para", text: line });
+        const isListItem = LIST_ITEM_REGEX.test(line);
+        const wasListItem = pendingPara.length > 0 && LIST_ITEM_REGEX.test(pendingPara[0]!);
+        if (isListItem || (wasListItem && !isListItem)) {
+          flushPara();
+        }
+        pendingPara.push(line);
       }
     }
   }
 
+  flushPara();
   if (inTable) flushTable();
   return blocks;
 }
