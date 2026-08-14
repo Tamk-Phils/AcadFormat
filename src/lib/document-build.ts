@@ -103,6 +103,25 @@ function isOriginalCaption(line: string, chapter?: any): boolean {
   return false;
 }
 
+function isOriginalSectionTitle(line: string, chapter?: any): boolean {
+  if (!chapter) return false;
+  const cleanedLine = line.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const cleanedChapterTitle = chapter.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (cleanedChapterTitle && (cleanedLine === cleanedChapterTitle || cleanedLine.includes(cleanedChapterTitle))) {
+    return true;
+  }
+
+  for (const sec of chapter.sections || []) {
+    const cleanedTitle = sec.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanedTitle && (cleanedLine === cleanedTitle || cleanedLine.includes(cleanedTitle) || cleanedTitle.includes(cleanedLine))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
   const blocks: Block[] = [];
   const lines = content.split("\n");
@@ -180,8 +199,13 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       if (inTable) flushTable();
 
       if (isStrayHeading(line)) {
-        blocks.push({ type: "heading2", text: cleanTitle(line) });
+        if (isOriginalSectionTitle(line, chapter)) {
+          continue;
+        }
+        blocks.push({ type: "heading2", text: line });
       } else if (isOriginalCaption(line, chapter)) {
+        continue;
+      } else if (isOriginalSectionTitle(line, chapter)) {
         continue;
       } else {
         blocks.push({ type: "para", text: line });
