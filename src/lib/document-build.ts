@@ -122,7 +122,9 @@ function isOriginalSectionTitle(line: string, chapter?: any): boolean {
   return false;
 }
 
-const LIST_ITEM_REGEX = /^\s*(?:[-*•+]|\d+\.|\w\))\s+/;
+const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•";
+const BULLET_SPLIT_REGEX = new RegExp(`\\s*(?=[${BULLET_CHARS}])`);
+const LIST_ITEM_REGEX = /^\s*(?:[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*|[a-zA-Z0-9]+[.)]\s+)/;
 
 function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: boolean): boolean {
   const prev = prevLine.trim();
@@ -146,7 +148,14 @@ function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: bo
 
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
   const blocks: Block[] = [];
-  const lines = content.split("\n");
+  const rawLines = content.split("\n");
+  const lines: string[] = [];
+  rawLines.forEach((rawLine) => {
+    const parts = rawLine.split(BULLET_SPLIT_REGEX);
+    parts.forEach((part) => {
+      if (part.trim()) lines.push(part.trim());
+    });
+  });
 
   let inTable = false;
   let tableLines: string[] = [];
