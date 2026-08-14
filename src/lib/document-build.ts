@@ -78,6 +78,121 @@ function paragraphs(text: string): string[] {
     .filter((p) => !isStrayHeading(p));
 }
 
+const CAPTION_REGEX = /^\s*(figure|table|fig|tbl)\s*\d+(?:\.\d+)*\b[:.\-–—]?/i;
+
+function isOriginalCaption(line: string, chapter?: any): boolean {
+  if (!chapter) return false;
+  if (!CAPTION_REGEX.test(line)) return false;
+
+  const cleanedLine = line.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  for (const fig of chapter.figures || []) {
+    const cleanedCaption = fig.caption.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanedCaption && (cleanedLine.includes(cleanedCaption) || cleanedCaption.includes(cleanedLine))) {
+      return true;
+    }
+  }
+
+  for (const tbl of chapter.tables || []) {
+    const cleanedTitle = tbl.title.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (cleanedTitle && (cleanedLine.includes(cleanedTitle) || cleanedTitle.includes(cleanedLine))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
+  const blocks: Block[] = [];
+  const lines = content.split("\n");
+
+  let inTable = false;
+  let tableLines: string[] = [];
+
+  const flushTable = () => {
+    if (tableLines.length === 0) return;
+
+    const rows: string[][] = [];
+    tableLines.forEach((line) => {
+      let cells: string[] = [];
+      if (line.includes("  |  ")) {
+        cells = line.split("  |  ");
+      } else if (line.includes("|")) {
+        cells = line.split("|");
+        if (line.trim().startsWith("|")) cells.shift();
+        if (line.trim().endsWith("|")) cells.pop();
+      } else if (line.includes("\t")) {
+        cells = line.split("\t");
+      } else {
+        cells = [line];
+      }
+
+      const trimmedCells = cells.map((c) => c.trim());
+      const isSeparator = trimmedCells.every((c) => !c || /^[:\-\s]+$/.test(c));
+      if (!isSeparator && trimmedCells.some((c) => c.length > 0)) {
+        rows.push(trimmedCells);
+      }
+    });
+
+    if (rows.length > 0) {
+      blocks.push({
+        type: "table",
+        text: tableLines.join("\n"),
+        tableRows: rows,
+      });
+    }
+    tableLines = [];
+    inTable = false;
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!.trim();
+    if (!line) {
+      if (inTable) flushTable();
+      continue;
+    }
+
+    const imageMatch = line.match(/^\[IMAGE:(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i);
+    if (imageMatch) {
+      if (inTable) flushTable();
+      const imageIndex = imageMatch[1];
+      const imageId = imageIndex !== undefined ? `img-${imageIndex}` : undefined;
+      const exists = imageId ? finalImages.some((img) => img.id === imageId) : false;
+      if (exists) {
+        blocks.push({ type: "image", text: "", imageId });
+      } else {
+        blocks.push({ type: "center", text: `[ Figure Image ${imageIndex || ""} ]` });
+      }
+      continue;
+    }
+
+    const hasPipes = (line.match(/\|/g) || []).length >= 2;
+    const isTableRow = inTable ||
+      line.includes("  |  ") ||
+      (line.startsWith("|") && line.endsWith("|")) ||
+      (hasPipes && i + 1 < lines.length && /^[:\|\-\s]+$/.test(lines[i+1]!.trim()));
+
+    if (isTableRow) {
+      inTable = true;
+      tableLines.push(lines[i]!);
+    } else {
+      if (inTable) flushTable();
+
+      if (isStrayHeading(line)) {
+        blocks.push({ type: "heading2", text: cleanTitle(line) });
+      } else if (isOriginalCaption(line, chapter)) {
+        continue;
+      } else {
+        blocks.push({ type: "para", text: line });
+      }
+    }
+  }
+
+  if (inTable) flushTable();
+  return blocks;
+}
+
 /** Split blocks into page-sized chunks using an approximate character budget. */
 function chunkBlocks(blocks: Block[]): Block[][] {
   const pages: Block[][] = [];
@@ -93,7 +208,9 @@ function chunkBlocks(blocks: Block[]): Block[][] {
             ? 900
             : block.type === "logos"
               ? 300
-              : block.text.length + 60;
+              : block.type === "table"
+                ? 1000
+                : block.text.length + 60;
     if (used + weight > CHARS_PER_PAGE && current.length > 0) {
       pages.push(current);
       current = [];
@@ -148,59 +265,126 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     return startNumber;
   };
 
-  const figureImages = (model.images ?? []).filter((image) => image.role === "figure");
   const logoImages = (model.images ?? []).filter((image) => image.role === "logo");
-  let figureImageCursor = 0;
 
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   model.chapters.forEach((chapter, chapterIndex) => {
     const chapterNumber = chapterIndex + 1;
     const chapterTitle = cleanTitle(chapter.title);
-    const blocks: Block[] = [
+
+    // 1. Generate raw blocks
+    const rawBlocks: Block[] = [
       { type: "heading1", text: `CHAPTER ${chapterNumber}: ${chapterTitle.toUpperCase()}` },
     ];
-    paragraphs(chapter.intro || "").forEach((p) => blocks.push({ type: "para", text: p }));
+
+    const introBlocks = parseSectionContent(chapter.intro || "", model.images ?? [], chapter);
+    rawBlocks.push(...introBlocks);
 
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
     chapter.sections.forEach((section, sectionIndex) => {
       const number = `${chapterNumber}.${sectionIndex + 1}`;
       const sectionTitle = cleanTitle(section.title);
-      sectionPageMarks.push({ title: `${number} ${sectionTitle}`, blockIndex: blocks.length });
-      blocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
-      paragraphs(section.content).forEach((p) => blocks.push({ type: "para", text: p }));
+      sectionPageMarks.push({ title: `${number} ${sectionTitle}`, blockIndex: rawBlocks.length });
+      rawBlocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
+
+      const sectionBlocks = parseSectionContent(section.content, model.images ?? [], chapter);
+      rawBlocks.push(...sectionBlocks);
     });
 
+    // 2. Post-process to insert captions, renumber figures and tables, and record page marks
+    const blocks: Block[] = [];
+    let figureIdx = 0;
+    let tableIdx = 0;
     const figureMarks: { label: string; caption: string; blockIndex: number }[] = [];
-    chapter.figures.forEach((figure, figureIndex) => {
+    const tableMarks: { label: string; title: string; blockIndex: number }[] = [];
+
+    const updatedSectionPageMarks: { title: string; blockIndex: number }[] = [];
+    let rawIdx = 0;
+
+    rawBlocks.forEach((block) => {
+      const sectionMark = sectionPageMarks.find((m) => m.blockIndex === rawIdx);
+      if (sectionMark) {
+        updatedSectionPageMarks.push({ title: sectionMark.title, blockIndex: blocks.length });
+      }
+
+      if (block.type === "image") {
+        const figure = chapter.figures[figureIdx];
+        if (figure) {
+          const label =
+            config.figureNumbering === "chapter"
+              ? `Figure ${chapterNumber}.${figureIdx + 1}`
+              : `Figure ${listOfFigures.length + figureIdx + 1}`;
+
+          blocks.push({
+            ...block,
+            text: figure.caption,
+          });
+
+          figureMarks.push({ label, caption: figure.caption, blockIndex: blocks.length });
+          blocks.push({ type: "caption", text: `${label}: ${figure.caption}` });
+          figureIdx += 1;
+        } else {
+          blocks.push(block);
+        }
+      } else if (block.type === "table") {
+        const table = chapter.tables[tableIdx];
+        if (table) {
+          const label =
+            config.tableNumbering === "chapter"
+              ? `Table ${chapterNumber}.${tableIdx + 1}`
+              : `Table ${listOfTables.length + tableIdx + 1}`;
+
+          tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
+          blocks.push({ type: "caption", text: `${label}: ${table.title}` });
+          blocks.push({
+            ...block,
+            text: table.title,
+          });
+          tableIdx += 1;
+        } else {
+          blocks.push(block);
+        }
+      } else {
+        blocks.push(block);
+      }
+
+      rawIdx += 1;
+    });
+
+    // Handle any figures/tables defined in metadata but not encountered in section content:
+    for (let f = figureIdx; f < chapter.figures.length; f += 1) {
+      const figure = chapter.figures[f]!;
       const label =
         config.figureNumbering === "chapter"
-          ? `Figure ${chapterNumber}.${figureIndex + 1}`
-          : `Figure ${listOfFigures.length + figureIndex + 1}`;
-      figureMarks.push({ label, caption: figure.caption, blockIndex: blocks.length });
-      const image = figureImages[figureImageCursor];
-      if (image) {
-        figureImageCursor += 1;
-        blocks.push({ type: "image", text: figure.caption, imageId: image.id });
+          ? `Figure ${chapterNumber}.${f + 1}`
+          : `Figure ${listOfFigures.length + f + 1}`;
+
+      const imageId = `img-${f}`;
+      const exists = model.images?.some((img) => img.id === imageId);
+
+      if (exists) {
+        blocks.push({ type: "image", text: figure.caption, imageId });
       } else {
         blocks.push({ type: "center", text: `[ ${figure.originalLabel || figure.kind || "Figure"} ]` });
       }
+      figureMarks.push({ label, caption: figure.caption, blockIndex: blocks.length });
       blocks.push({ type: "caption", text: `${label}: ${figure.caption}` });
-    });
+    }
 
-    const tableMarks: { label: string; title: string; blockIndex: number }[] = [];
-    chapter.tables.forEach((table, tableIndex) => {
+    for (let t = tableIdx; t < chapter.tables.length; t += 1) {
+      const table = chapter.tables[t]!;
       const label =
         config.tableNumbering === "chapter"
-          ? `Table ${chapterNumber}.${tableIndex + 1}`
-          : `Table ${listOfTables.length + tableIndex + 1}`;
+          ? `Table ${chapterNumber}.${t + 1}`
+          : `Table ${listOfTables.length + t + 1}`;
+
       tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
       blocks.push({ type: "caption", text: `${label}: ${table.title}` });
       blocks.push({ type: "center", text: `[ ${table.originalLabel || "Table content"} ]` });
-    });
+    }
 
     const startPage = pushBody(`Chapter ${chapterNumber}`, blocks, "body");
     const pageOfBlock = (blockIndex: number) => {
-      // Recompute which chunk the block landed in.
       const chunks = chunkBlocks(blocks);
       let seen = 0;
       for (let i = 0; i < chunks.length; i += 1) {
@@ -216,9 +400,11 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       page: String(startPage),
       level: 1,
     });
-    sectionPageMarks.forEach((mark) =>
+
+    updatedSectionPageMarks.forEach((mark) =>
       toc.push({ label: "", text: mark.title, page: pageOfBlock(mark.blockIndex), level: 2 }),
     );
+
     figureMarks.forEach((mark) =>
       listOfFigures.push({
         label: mark.label,
@@ -226,6 +412,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         page: pageOfBlock(mark.blockIndex),
       }),
     );
+
     tableMarks.forEach((mark) =>
       listOfTables.push({ label: mark.label, text: mark.title, page: pageOfBlock(mark.blockIndex) }),
     );
@@ -246,7 +433,8 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     const blocks: Block[] = [{ type: "heading1", text: "APPENDICES" }];
     model.appendices.forEach((appendix) => {
       blocks.push({ type: "heading2", text: `${appendix.label}: ${cleanTitle(appendix.title)}` });
-      paragraphs(appendix.content).forEach((p) => blocks.push({ type: "para", text: p }));
+      const appendixBlocks = parseSectionContent(appendix.content, model.images ?? []);
+      blocks.push(...appendixBlocks);
     });
     const page = pushBody("Appendices", blocks, "back");
     toc.push({ label: "", text: "APPENDICES", page: String(page), level: 1 });

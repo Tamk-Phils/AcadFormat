@@ -12,6 +12,10 @@ import {
   TabStopType,
   TextRun,
   SectionType,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
 } from "docx";
 import type { FinalDocument, RenderedPage } from "./document-model";
 import type { InstitutionConfig } from "./institutions";
@@ -35,15 +39,15 @@ function renderPage(
   config: InstitutionConfig,
   breakAfter: boolean,
   images: Map<string, ImageAsset>,
-): Paragraph[] {
+): (Paragraph | Table)[] {
   const font = config.font;
   const size = config.fontSizePt * 2;
   const spacing = { line: Math.round(config.lineSpacing * 240), after: 120 };
-  const paragraphs: Paragraph[] = [];
+  const elements: (Paragraph | Table)[] = [];
 
   page.blocks.forEach((block) => {
     if (block.type === "spacer") {
-      paragraphs.push(new Paragraph({ children: [new TextRun({ text: "", font, size })] }));
+      elements.push(new Paragraph({ children: [new TextRun({ text: "", font, size })] }));
       return;
     }
     const common = { font, size };
@@ -62,13 +66,13 @@ function renderPage(
               }),
           );
         if (runs.length > 0)
-          paragraphs.push(new Paragraph({ alignment: AlignmentType.CENTER, children: runs }));
+          elements.push(new Paragraph({ alignment: AlignmentType.CENTER, children: runs }));
         break;
       }
       case "image": {
         const asset = block.imageId ? images.get(block.imageId) : undefined;
         if (asset)
-          paragraphs.push(
+          elements.push(
             new Paragraph({
               alignment: AlignmentType.CENTER,
               spacing: { before: 120, after: 120 },
@@ -89,7 +93,7 @@ function renderPage(
         break;
       }
       case "title":
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing,
@@ -98,7 +102,7 @@ function renderPage(
         );
         break;
       case "center":
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing,
@@ -107,7 +111,7 @@ function renderPage(
         );
         break;
       case "heading1":
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { ...spacing, before: 240 },
@@ -116,7 +120,7 @@ function renderPage(
         );
         break;
       case "heading2":
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             spacing: { ...spacing, before: 180 },
             children: [new TextRun({ ...common, text: block.text, bold: true })],
@@ -124,7 +128,7 @@ function renderPage(
         );
         break;
       case "caption":
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing,
@@ -136,7 +140,7 @@ function renderPage(
         const [left, right] = block.text.split("\t");
         const indent = ((block.level ?? 1) - 1) * 360;
         const bold = block.bold === true;
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             spacing: { line: 240, after: 60 },
             ...(indent > 0 ? { indent: { left: indent } } : {}),
@@ -155,8 +159,40 @@ function renderPage(
         );
         break;
       }
+      case "table": {
+        const rows = (block.tableRows ?? []).map((row, rIdx) => {
+          return new TableRow({
+            children: row.map((cell) => {
+              return new TableCell({
+                width: { size: 100 / row.length, type: WidthType.PERCENTAGE },
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        ...common,
+                        text: cell,
+                        bold: rIdx === 0,
+                      }),
+                    ],
+                  }),
+                ],
+              });
+            }),
+          });
+        });
+
+        if (rows.length > 0) {
+          elements.push(
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows,
+            }),
+          );
+        }
+        break;
+      }
       default:
-        paragraphs.push(
+        elements.push(
           new Paragraph({
             alignment: AlignmentType.JUSTIFIED,
             spacing,
@@ -166,8 +202,8 @@ function renderPage(
     }
   });
 
-  if (breakAfter) paragraphs.push(new Paragraph({ children: [new PageBreak()] }));
-  return paragraphs;
+  if (breakAfter) elements.push(new Paragraph({ children: [new PageBreak()] }));
+  return elements;
 }
 
 export async function buildDocx(

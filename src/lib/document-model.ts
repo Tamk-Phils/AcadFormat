@@ -144,7 +144,8 @@ export type BlockType =
   | "listline"
   | "image"
   | "logos"
-  | "spacer";
+  | "spacer"
+  | "table";
 
 export interface Block {
   type: BlockType;
@@ -155,6 +156,8 @@ export interface Block {
   level?: number;
   /** Renders the line in bold (chapter entries, table headers). */
   bold?: boolean;
+  /** Parsed table cell grid (rows of column cell strings). */
+  tableRows?: string[][];
 }
 
 export interface RenderedPage {

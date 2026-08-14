@@ -98,6 +98,35 @@ export function DocumentPreview({
                   </p>
                 );
               }
+              if (block.type === "table") {
+                return (
+                  <div key={index} className="my-4 overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <tbody>
+                        {(block.tableRows ?? []).map((row, rIdx) => (
+                          <tr
+                            key={rIdx}
+                            className={
+                              rIdx === 0
+                                ? "border-b border-border bg-secondary/50 font-semibold"
+                                : "border-b border-border last:border-0 hover:bg-secondary/20"
+                            }
+                          >
+                            {row.map((cell, cIdx) => {
+                              const CellTag = rIdx === 0 ? "th" : "td";
+                              return (
+                                <CellTag key={cIdx} className="p-3 align-middle">
+                                  {cell}
+                                </CellTag>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              }
               return (
                 <p key={index} className="doc-para">
                   {block.text}

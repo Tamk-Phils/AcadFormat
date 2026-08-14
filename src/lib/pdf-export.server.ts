@@ -152,6 +152,58 @@ export async function buildPdf(
           font: block.bold === true ? bold : regular,
           size: baseSize,
         });
+      } else if (block.type === "table" && block.tableRows && block.tableRows.length > 0) {
+        const rows = block.tableRows;
+        const colsCount = Math.max(...rows.map((r) => r.length));
+        const colWidth = contentWidth / colsCount;
+
+        ensure(6);
+        sheet.drawLine({
+          start: { x: margin.left, y },
+          end: { x: margin.left + contentWidth, y },
+          thickness: 1,
+          color: rgb(0.2, 0.2, 0.2),
+        });
+        y -= 4;
+
+        for (let rIdx = 0; rIdx < rows.length; rIdx += 1) {
+          const row = rows[rIdx]!;
+          const rowFont = rIdx === 0 ? bold : regular;
+
+          const wrappedCells = row.map((cell) =>
+            wrap(sanitize(cell), rowFont, baseSize, colWidth - 10),
+          );
+          const maxLines = Math.max(...wrappedCells.map((lines) => lines.length));
+          const rowHeight = maxLines * leading + 8;
+
+          ensure(rowHeight);
+
+          for (let cIdx = 0; cIdx < row.length; cIdx += 1) {
+            const cellLines = wrappedCells[cIdx]!;
+            let cellY = y - 4;
+            for (const line of cellLines) {
+              sheet.drawText(line, {
+                x: margin.left + cIdx * colWidth + 5,
+                y: cellY - baseSize,
+                size: baseSize,
+                font: rowFont,
+              });
+              cellY -= leading;
+            }
+          }
+
+          y -= rowHeight;
+
+          const isHeader = rIdx === 0;
+          const isBottom = rIdx === rows.length - 1;
+          sheet.drawLine({
+            start: { x: margin.left, y },
+            end: { x: margin.left + contentWidth, y },
+            thickness: isHeader || isBottom ? 1 : 0.5,
+            color: isHeader || isBottom ? rgb(0.2, 0.2, 0.2) : rgb(0.7, 0.7, 0.7),
+          });
+        }
+        y -= 12;
       } else write(block.text, { font: regular, size: baseSize });
     }
 
