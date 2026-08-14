@@ -471,7 +471,11 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
   // ---- Preliminary pages (roman numerals, generated lists) ----
   const prelimPages: RenderedPage[] = [];
-  const addPrelim = (sectionTitle: string, blocks: Block[], kind: "cover" | "preliminary") => {
+  const prelimSectionStarts = new Map<SectionType, number>();
+
+  const addPrelim = (type: SectionType, sectionTitle: string, blocks: Block[], kind: "cover" | "preliminary") => {
+    const startIndex = prelimPages.length;
+    prelimSectionStarts.set(type, startIndex);
     chunkBlocks(blocks).forEach((pageBlocks, i) => {
       prelimPages.push({
         index: 0,
@@ -521,20 +525,39 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     { type: "center", text: (meta.monthYear || "").toUpperCase() },
   ];
 
+  // Construct complete Table of Contents entries.
+  // First, we populate preliminary entries with placeholders, followed by the main body entries.
+  const completeTOC: { label: string; text: string; page: string; level: number }[] = [];
+
+  config.preliminaryOrder.forEach((type) => {
+    if (type === "COVER_PAGE" || type === "TITLE_PAGE" || type === "TABLE_OF_CONTENTS") return;
+    const title = PRELIM_TITLES[type] || type.replace(/_/g, " ");
+    completeTOC.push({
+      label: "",
+      text: title.toUpperCase(),
+      page: "ii", // temporary Roman numeral placeholder
+      level: 1,
+    });
+  });
+
+  // Append all main body entries (chapters, sections, references, appendices)
+  completeTOC.push(...toc);
+
   for (const type of config.preliminaryOrder) {
     const title = PRELIM_TITLES[type] || type.replace(/_/g, " ");
     if (type === "COVER_PAGE") {
-      addPrelim("Cover Page", coverBlocks, "cover");
+      addPrelim(type, "Cover Page", coverBlocks, "cover");
       continue;
     }
     if (type === "TITLE_PAGE") {
-      addPrelim("Title Page", coverBlocks, "preliminary");
+      addPrelim(type, "Title Page", coverBlocks, "preliminary");
       continue;
     }
     if (type === "TABLE_OF_CONTENTS") {
-      addPrelim("Table of Contents", [
+      // Chunk layout based on the full size of completeTOC
+      addPrelim(type, "Table of Contents", [
         { type: "heading1", text: "TABLE OF CONTENTS" },
-        ...toc.map((entry) => ({
+        ...completeTOC.map((entry) => ({
           type: "listline" as const,
           level: entry.level,
           bold: entry.level === 1,
@@ -544,7 +567,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       continue;
     }
     if (type === "LIST_OF_FIGURES") {
-      addPrelim("List of Figures", [
+      addPrelim(type, "List of Figures", [
         { type: "heading1", text: "LIST OF FIGURES" },
         ...(listOfFigures.length
           ? listOfFigures.map((entry) => ({
@@ -556,7 +579,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       continue;
     }
     if (type === "LIST_OF_TABLES") {
-      addPrelim("List of Tables", [
+      addPrelim(type, "List of Tables", [
         { type: "heading1", text: "LIST OF TABLES" },
         ...(listOfTables.length
           ? listOfTables.map((entry) => ({
@@ -568,7 +591,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       continue;
     }
     if (type === "LIST_OF_ABBREVIATIONS") {
-      addPrelim("List of Abbreviations", [
+      addPrelim(type, "List of Abbreviations", [
         { type: "heading1", text: "LIST OF ABBREVIATIONS" },
         ...(listOfAbbreviations.length
           ? listOfAbbreviations.map((entry) => ({
@@ -582,7 +605,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
     const existing = model.preliminary.find((p) => p.type === type);
     const content = existing?.content?.trim();
-    addPrelim(title, [
+    addPrelim(type, title, [
       { type: "heading1", text: title.toUpperCase() },
       content
         ? { type: "para", text: content }
@@ -605,11 +628,50 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     page.numberLabel = config.preliminaryNumbering === "roman-lower" ? roman(romanCounter) : "";
   });
 
+  // Map preliminary sections to their resolved page numbers
+  const prelimSectionPages = new Map<SectionType, string>();
+  prelimSectionStarts.forEach((startIndex, secType) => {
+    const pageLabel = prelimPages[startIndex]?.numberLabel || "";
+    prelimSectionPages.set(secType, pageLabel);
+  });
+
+  // Update completeTOC entries with the actual roman page numbers
+  let pIdx = 0;
+  config.preliminaryOrder.forEach((secType) => {
+    if (secType === "COVER_PAGE" || secType === "TITLE_PAGE" || secType === "TABLE_OF_CONTENTS") return;
+    const page = prelimSectionPages.get(secType) || "";
+    if (completeTOC[pIdx]) {
+      completeTOC[pIdx]!.page = page;
+    }
+    pIdx += 1;
+  });
+
+  // Re-apply the updated completeTOC to the TOC pages blocks
+  const tocStartIndex = prelimSectionStarts.get("TABLE_OF_CONTENTS");
+  if (tocStartIndex !== undefined) {
+    const tocBlocks: Block[] = [
+      { type: "heading1", text: "TABLE OF CONTENTS" },
+      ...completeTOC.map((entry) => ({
+        type: "listline" as const,
+        level: entry.level,
+        bold: entry.level === 1,
+        text: `${entry.label ? `${entry.label}: ` : ""}${entry.text}\t${entry.page}`,
+      })),
+    ];
+    const tocPages = chunkBlocks(tocBlocks);
+    tocPages.forEach((pageBlocks, offset) => {
+      const pageIndex = tocStartIndex + offset;
+      if (prelimPages[pageIndex]) {
+        prelimPages[pageIndex]!.blocks = pageBlocks;
+      }
+    });
+  }
+
   const pages = [...prelimPages, ...bodyPages].map((page, index) => ({ ...page, index: index + 1 }));
 
   return {
     pages,
-    toc,
+    toc: completeTOC,
     listOfFigures,
     listOfTables,
     listOfAbbreviations,
