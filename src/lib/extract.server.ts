@@ -90,7 +90,7 @@ export async function extractDocument(
 
   const images: ExtractedImage[] = [];
   const { value: html } = await mammoth.convertToHtml(
-    { arrayBuffer: bytes },
+    { buffer: Buffer.from(bytes) },
     {
       convertImage: mammoth.images.imgElement(async (image) => {
         const base64 = await image.readAsBase64String();

@@ -24,7 +24,13 @@ export function SiteHeader({ user }: { user?: User | null }) {
             document engine
           </span>
         </Link>
-        <nav className="flex items-center gap-2">
+        <nav className="flex items-center gap-1 sm:gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/docs">Documentation</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link to="/institutions">Institutions</Link>
+          </Button>
           {user ? (
             <>
               <Button asChild variant="ghost" size="sm">

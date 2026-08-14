@@ -3,8 +3,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { auditFinalDocument, buildFinalDocument } from "./document-build";
 import type { DocumentImage, DocumentModel, IssueDraft } from "./document-model";
 import { resolveConfig, type InstitutionSelection } from "./institutions";
-import type { ImageAsset } from "./docx-export.server";
+import { buildDocx, type ImageAsset } from "./docx-export.server";
+import { buildPdf } from "./pdf-export.server";
+import { extractDocument } from "./extract.server";
+import { analyzeWithAI } from "./ai.server";
 import { restoreVerbatimContent } from "./verbatim";
+import { ensureDocumentsBucket } from "./storage-bootstrap.server";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 /** Supabase jsonb columns are typed as Json; app types are structurally compatible. */
 const toJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as never;
@@ -24,11 +29,14 @@ export const analyzeDocument = createServerFn({ method: "POST" })
     await supabase.from("documents").update({ status: "analyzing", error_message: null }).eq("id", row.id);
 
     try {
-      const download = await supabase.storage.from("documents").download(row.storage_path);
-      if (download.error || !download.data) throw new Error("Could not read the uploaded file.");
+      await ensureDocumentsBucket();
+      const download = await supabaseAdmin.storage.from("documents").download(row.storage_path);
+      if (download.error || !download.data) {
+        const msg = download.error?.message ?? "Unknown storage error";
+        throw new Error(`Could not read the uploaded file: ${msg}. Please re-upload the document.`);
+      }
       const bytes = await download.data.arrayBuffer();
 
-      const { extractDocument } = await import("./extract.server");
       const extracted = await extractDocument(bytes, row.file_type);
       if (extracted.text.trim().length < 200)
         throw new Error("No readable text was found in this file. If it is a scanned PDF, upload the DOCX instead.");
@@ -49,7 +57,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
               : "png";
         const path = `${userId}/assets/${row.id}/img-${image.index}.${ext}`;
         const binary = Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0));
-        const upload = await supabase.storage
+        const upload = await supabaseAdmin.storage
           .from("documents")
           .upload(path, binary, { contentType: image.contentType, upsert: true });
         if (upload.error) continue;
@@ -61,7 +69,6 @@ export const analyzeDocument = createServerFn({ method: "POST" })
         });
       }
 
-      const { analyzeWithAI } = await import("./ai.server");
       const analysis = await analyzeWithAI({
         text: extracted.text,
         fileName: row.file_name,
@@ -161,11 +168,10 @@ export const exportDocx = createServerFn({ method: "POST" })
     if (error || !row?.final_document) throw new Error("Format the document before exporting.");
 
     const selection = row.institution as unknown as InstitutionSelection;
-    const { buildDocx } = await import("./docx-export.server");
     const final = row.final_document as unknown as { images?: DocumentImage[] };
     const images = new Map<string, ImageAsset>();
     for (const image of final.images ?? []) {
-      const file = await context.supabase.storage.from("documents").download(image.path);
+      const file = await supabaseAdmin.storage.from("documents").download(image.path);
       if (file.error || !file.data) continue;
       const bytes = new Uint8Array(await file.data.arrayBuffer());
       images.set(image.id, {
@@ -199,11 +205,10 @@ export const exportPdf = createServerFn({ method: "POST" })
     if (error || !row?.final_document) throw new Error("Format the document before exporting.");
 
     const selection = row.institution as unknown as InstitutionSelection;
-    const { buildPdf } = await import("./pdf-export.server");
     const final = row.final_document as unknown as { images?: DocumentImage[] };
     const images = new Map<string, { data: Uint8Array; contentType: string }>();
     for (const image of final.images ?? []) {
-      const file = await context.supabase.storage.from("documents").download(image.path);
+      const file = await supabaseAdmin.storage.from("documents").download(image.path);
       if (file.error || !file.data) continue;
       images.set(image.id, {
         data: new Uint8Array(await file.data.arrayBuffer()),

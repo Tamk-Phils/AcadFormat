@@ -54,61 +54,188 @@ Return STRICT JSON only, matching this shape:
 health.figures/tables/abbreviations/references/crossReferences are COUNTS of issues (abbreviations = count detected).
 structure and formatting are percentage scores 0-100. Section content must remain complete and verbatim.`;
 
+export type AIProvider = "gemini" | "groq" | "openrouter" | "lovable";
+
+interface ProviderConfig {
+  provider: AIProvider;
+  url: string;
+  headers: Record<string, string>;
+  model: string;
+}
+
+function resolveAIProvider(provider: AIProvider): ProviderConfig {
+  const geminiKey = process.env["GEMINI_API_KEY"];
+  const groqKey = process.env["GROQ_API_KEY"];
+  const openrouterKey = process.env["OPENROUTER_API_KEY"];
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+
+  switch (provider) {
+    case "groq":
+      return {
+        provider: "groq",
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${groqKey}`,
+        },
+        model: process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile",
+      };
+    case "gemini":
+      return {
+        provider: "gemini",
+        url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${geminiKey}`,
+        },
+        model: process.env["GEMINI_MODEL"] || "gemini-3.5-flash",
+      };
+    case "openrouter":
+      return {
+        provider: "openrouter",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openrouterKey}`,
+          "HTTP-Referer": "https://acadformat.com",
+          "X-Title": "AcadFormat",
+        },
+        model: process.env["OPENROUTER_MODEL"] || "google/gemini-2.5-flash",
+      };
+    case "lovable":
+      return {
+        provider: "lovable",
+        url: GATEWAY,
+        headers: {
+          "Content-Type": "application/json",
+          "Lovable-API-Key": lovableKey,
+        },
+        model: MODEL,
+      };
+  }
+}
+
 export async function analyzeWithAI(input: {
   text: string;
   fileName: string;
   imageCount: number;
   tableCount: number;
   institutionHint: string;
+  preferredProvider?: string;
 }): Promise<AnalysisResult> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI is not configured for this project.");
+  const geminiKey = process.env["GEMINI_API_KEY"];
+  const groqKey = process.env["GROQ_API_KEY"];
+  const openrouterKey = process.env["OPENROUTER_API_KEY"];
+  const lovableKey = process.env["LOVABLE_API_KEY"];
 
-  const body = {
-    model: MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `File: ${input.fileName}
+  const hasKey = (p: AIProvider) => {
+    if (p === "groq") return !!groqKey;
+    if (p === "gemini") return !!geminiKey;
+    if (p === "openrouter") return !!openrouterKey;
+    if (p === "lovable") return !!lovableKey;
+    return false;
+  };
+
+  // Build the list of providers to try
+  const providersToTry: AIProvider[] = [];
+
+  // 1. If preferredProvider is explicitly requested and has a key, try it first
+  if (input.preferredProvider && hasKey(input.preferredProvider as AIProvider)) {
+    providersToTry.push(input.preferredProvider as AIProvider);
+  }
+
+  // 2. If AI_PROVIDER is set in env and has a key, try it next
+  const envProvider = (process.env["AI_PROVIDER"] || "").toLowerCase() as AIProvider;
+  if (envProvider && hasKey(envProvider) && !providersToTry.includes(envProvider)) {
+    providersToTry.push(envProvider);
+  }
+
+  // 3. Fallback list in order of speed (groq -> gemini -> openrouter -> lovable)
+  const defaultOrder: AIProvider[] = ["groq", "gemini", "openrouter", "lovable"];
+  for (const p of defaultOrder) {
+    if (hasKey(p) && !providersToTry.includes(p)) {
+      providersToTry.push(p);
+    }
+  }
+
+  if (providersToTry.length === 0) {
+    throw new Error("AI is not configured. Please set GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, or LOVABLE_API_KEY in your environment.");
+  }
+
+  // Proactively skip Groq for very large documents if we are in auto-select mode to avoid 413 token limits
+  const isTooLargeForGroq = input.text.length > 25000;
+
+  let lastError: Error | null = null;
+
+  for (const provider of providersToTry) {
+    if (provider === "groq" && isTooLargeForGroq && input.preferredProvider !== "groq") {
+      console.log(`[AI] Skipping Groq for large document (${input.text.length} chars) to avoid 413 rate limit.`);
+      continue;
+    }
+
+    try {
+      const config = resolveAIProvider(provider);
+      console.log(`[AI] Attempting analysis using ${provider} with model ${config.model}...`);
+
+      const body = {
+        model: config.model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `File: ${input.fileName}
 Detected embedded images: ${input.imageCount}
 Detected tables: ${input.tableCount}
 Target institutional format: ${input.institutionHint}
 
 FULL DOCUMENT TEXT:
 ${input.text.slice(0, MAX_CHARS)}`,
-      },
-    ],
-    response_format: { type: "json_object" },
-  };
+          },
+        ],
+        response_format: { type: "json_object" },
+      };
 
-  const response = await fetch(GATEWAY, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Lovable-API-Key": apiKey },
-    body: JSON.stringify(body),
-  });
+      const response = await fetch(config.url, {
+        method: "POST",
+        headers: config.headers,
+        body: JSON.stringify(body),
+      });
 
-  if (response.status === 429) throw new Error("AI rate limit reached. Please retry in a moment.");
-  if (response.status === 402)
-    throw new Error("AI credits exhausted. Add credits in your workspace to continue.");
-  if (!response.ok) throw new Error(`AI analysis failed (${response.status}): ${await response.text()}`);
+      if (response.status === 429) {
+        throw new Error(`Rate limit reached for ${provider}.`);
+      }
+      if (response.status === 402) {
+        throw new Error(`Credits exhausted for ${provider}.`);
+      }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${provider} failed (${response.status}): ${errorText}`);
+      }
 
-  const payload = (await response.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  const content = payload.choices?.[0]?.message?.content ?? "";
-  const jsonText = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "");
-  let parsed: AnalysisResult;
-  try {
-    parsed = JSON.parse(jsonText) as AnalysisResult;
-  } catch {
-    const start = jsonText.indexOf("{");
-    const end = jsonText.lastIndexOf("}");
-    if (start < 0 || end < 0) throw new Error("The AI returned an unreadable analysis. Try again.");
-    parsed = JSON.parse(jsonText.slice(start, end + 1)) as AnalysisResult;
+      const payload = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const content = payload.choices?.[0]?.message?.content ?? "";
+      const jsonText = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "");
+      let parsed: AnalysisResult;
+      try {
+        parsed = JSON.parse(jsonText) as AnalysisResult;
+      } catch {
+        const start = jsonText.indexOf("{");
+        const end = jsonText.lastIndexOf("}");
+        if (start < 0 || end < 0) throw new Error("The AI returned an unreadable analysis.");
+        parsed = JSON.parse(jsonText.slice(start, end + 1)) as AnalysisResult;
+      }
+
+      console.log(`[AI] Analysis succeeded using ${provider}!`);
+      return normalize(parsed);
+    } catch (err: any) {
+      console.warn(`[AI] Provider ${provider} failed:`, err.message || err);
+      lastError = err;
+    }
   }
 
-  return normalize(parsed);
+  throw new Error(`All AI analysis attempts failed. Last error: ${lastError?.message || "Unknown error"}`);
 }
 
 function normalize(result: AnalysisResult): AnalysisResult {
