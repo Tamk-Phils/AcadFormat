@@ -124,6 +124,26 @@ function isOriginalSectionTitle(line: string, chapter?: any): boolean {
 
 const LIST_ITEM_REGEX = /^\s*(?:[-*•+]|\d+\.|\w\))\s+/;
 
+function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: boolean): boolean {
+  const prev = prevLine.trim();
+  const curr = currLine.trim();
+  if (!prev || !curr) return false;
+
+  if (hasEmptyLineBetween) {
+    // Only merge across an empty line if the current line starts with lowercase (i.e. is an accidental line-wrap)
+    return /^[a-z]/.test(curr);
+  }
+
+  // If there was no empty line, merge if the current line starts with lowercase
+  if (/^[a-z]/.test(curr)) return true;
+
+  // Merge if previous line doesn't end with terminal punctuation
+  const endsWithTerminal = /[.!?:]\s*$/.test(prev);
+  if (!endsWithTerminal) return true;
+
+  return false;
+}
+
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
   const blocks: Block[] = [];
   const lines = content.split("\n");
@@ -131,6 +151,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   let inTable = false;
   let tableLines: string[] = [];
   let pendingPara: string[] = [];
+  let hasEmptyLine = false;
 
   const flushPara = () => {
     if (pendingPara.length === 0) return;
@@ -177,7 +198,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!.trim();
     if (!line) {
-      flushPara();
+      hasEmptyLine = true;
       if (inTable) flushTable();
       continue;
     }
@@ -185,6 +206,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     const imageMatch = line.match(/^\[IMAGE:(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i);
     if (imageMatch) {
       flushPara();
+      hasEmptyLine = false;
       if (inTable) flushTable();
       const imageIndex = imageMatch[1];
       const imageId = imageIndex !== undefined ? `img-${imageIndex}` : undefined;
@@ -205,6 +227,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
 
     if (isTableRow) {
       flushPara();
+      hasEmptyLine = false;
       inTable = true;
       tableLines.push(lines[i]!);
     } else {
@@ -212,23 +235,34 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
 
       if (isStrayHeading(line)) {
         flushPara();
+        hasEmptyLine = false;
         if (isOriginalSectionTitle(line, chapter)) {
           continue;
         }
         blocks.push({ type: "heading2", text: line });
       } else if (isOriginalCaption(line, chapter)) {
         flushPara();
+        hasEmptyLine = false;
         continue;
       } else if (isOriginalSectionTitle(line, chapter)) {
         flushPara();
+        hasEmptyLine = false;
         continue;
       } else {
         const isListItem = LIST_ITEM_REGEX.test(line);
         const wasListItem = pendingPara.length > 0 && LIST_ITEM_REGEX.test(pendingPara[0]!);
+        
         if (isListItem || (wasListItem && !isListItem)) {
           flushPara();
+        } else if (pendingPara.length > 0) {
+          const prevLine = pendingPara[pendingPara.length - 1]!;
+          const shouldMergeLines = shouldMerge(prevLine, line, hasEmptyLine);
+          if (!shouldMergeLines) {
+            flushPara();
+          }
         }
         pendingPara.push(line);
+        hasEmptyLine = false;
       }
     }
   }
