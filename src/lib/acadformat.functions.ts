@@ -7,6 +7,7 @@ import { buildDocx, type ImageAsset } from "./docx-export.server";
 import { buildPdf } from "./pdf-export.server";
 import { extractDocument } from "./extract.server";
 import { analyzeWithAI, chatEditDocument } from "./ai.server";
+import { restoreVerbatimContent } from "./verbatim";
 import { getLogoBytes } from "./static-assets";
 import { ensureDocumentsBucket } from "./storage-bootstrap.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
