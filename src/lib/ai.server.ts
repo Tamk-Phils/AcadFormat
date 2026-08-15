@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "./document-model";
+import type { AnalysisResult, DocumentModel } from "./document-model";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
@@ -38,7 +38,7 @@ Return STRICT JSON only, matching this shape:
 {
  "understanding": {"topic":"","problem":"","objectives":[],"researchQuestions":[],"methodology":"","technologies":[],"findings":[],"conclusions":"","terminology":[]},
  "model": {
-   "meta": {"title":"","author":"","registrationNumber":"","department":"","supervisors":[],"monthYear":"","keywords":[]},
+   "meta": {"title":"","author":"","registrationNumber":"","department":"","supervisors":[],"monthYear":"","keywords":[],"headOfDepartment":"","director":"","degreeOfAuthor":""},
    "preliminary": [{"type":"ABSTRACT","title":"Abstract","content":"","present":true}],
    "chapters": [{"number":1,"title":"","type":"INTRODUCTION","intro":"","sections":[{"title":"","content":"","startMarker":"","endMarker":""}],
                  "figures":[{"id":"f1","chapter":1,"caption":"","originalLabel":"","kind":"","requiresUserReview":false,"confidence":90}],
@@ -54,7 +54,7 @@ Return STRICT JSON only, matching this shape:
 health.figures/tables/abbreviations/references/crossReferences are COUNTS of issues (abbreviations = count detected).
 structure and formatting are percentage scores 0-100. Section content must remain complete and verbatim.`;
 
-export type AIProvider = "gemini" | "groq" | "openrouter" | "lovable";
+export type AIProvider = "gemini" | "groq" | "openrouter" | "lovable" | "deepseek" | "custom";
 
 interface ProviderConfig {
   provider: AIProvider;
@@ -68,6 +68,9 @@ function resolveAIProvider(provider: AIProvider): ProviderConfig {
   const groqKey = process.env["GROQ_API_KEY"];
   const openrouterKey = process.env["OPENROUTER_API_KEY"];
   const lovableKey = process.env["LOVABLE_API_KEY"];
+  const deepseekKey = process.env["DEEPSEEK_API_KEY"];
+  const customKey = process.env["CUSTOM_API_KEY"];
+  const customUrl = process.env["CUSTOM_API_URL"];
 
   switch (provider) {
     case "groq":
@@ -108,11 +111,48 @@ function resolveAIProvider(provider: AIProvider): ProviderConfig {
         url: GATEWAY,
         headers: {
           "Content-Type": "application/json",
-          "Lovable-API-Key": lovableKey,
+          "Lovable-API-Key": lovableKey || "",
         },
         model: MODEL,
       };
+    case "deepseek":
+      return {
+        provider: "deepseek",
+        url: "https://api.deepseek.com/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${deepseekKey}`,
+        },
+        model: process.env["DEEPSEEK_MODEL"] || "deepseek-chat",
+      };
+    case "custom":
+      return {
+        provider: "custom",
+        url: customUrl || "http://localhost:11434/v1/chat/completions",
+        headers: {
+          "Content-Type": "application/json",
+          ...(customKey ? { "Authorization": `Bearer ${customKey}` } : {}),
+        },
+        model: process.env["CUSTOM_MODEL"] || "llama3",
+      };
   }
+}
+
+function hasKey(p: AIProvider): boolean {
+  const geminiKey = process.env["GEMINI_API_KEY"];
+  const groqKey = process.env["GROQ_API_KEY"];
+  const openrouterKey = process.env["OPENROUTER_API_KEY"];
+  const lovableKey = process.env["LOVABLE_API_KEY"];
+  const deepseekKey = process.env["DEEPSEEK_API_KEY"];
+  const customUrl = process.env["CUSTOM_API_URL"];
+
+  if (p === "groq") return !!groqKey;
+  if (p === "gemini") return !!geminiKey;
+  if (p === "openrouter") return !!openrouterKey;
+  if (p === "lovable") return !!lovableKey;
+  if (p === "deepseek") return !!deepseekKey;
+  if (p === "custom") return !!customUrl;
+  return false;
 }
 
 export async function analyzeWithAI(input: {
@@ -127,14 +167,8 @@ export async function analyzeWithAI(input: {
   const groqKey = process.env["GROQ_API_KEY"];
   const openrouterKey = process.env["OPENROUTER_API_KEY"];
   const lovableKey = process.env["LOVABLE_API_KEY"];
+  const deepseekKey = process.env["DEEPSEEK_API_KEY"];
 
-  const hasKey = (p: AIProvider) => {
-    if (p === "groq") return !!groqKey;
-    if (p === "gemini") return !!geminiKey;
-    if (p === "openrouter") return !!openrouterKey;
-    if (p === "lovable") return !!lovableKey;
-    return false;
-  };
 
   // Build the list of providers to try
   const providersToTry: AIProvider[] = [];
@@ -150,8 +184,8 @@ export async function analyzeWithAI(input: {
     providersToTry.push(envProvider);
   }
 
-  // 3. Fallback list in order of speed (groq -> gemini -> openrouter -> lovable)
-  const defaultOrder: AIProvider[] = ["groq", "gemini", "openrouter", "lovable"];
+  // 3. Fallback list in order of speed/preference (custom -> groq -> gemini -> deepseek -> openrouter -> lovable)
+  const defaultOrder: AIProvider[] = ["custom", "groq", "gemini", "deepseek", "openrouter", "lovable"];
   for (const p of defaultOrder) {
     if (hasKey(p) && !providersToTry.includes(p)) {
       providersToTry.push(p);
@@ -159,7 +193,7 @@ export async function analyzeWithAI(input: {
   }
 
   if (providersToTry.length === 0) {
-    throw new Error("AI is not configured. Please set GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, or LOVABLE_API_KEY in your environment.");
+    throw new Error("AI is not configured. Please set GEMINI_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY, CUSTOM_API_URL, or LOVABLE_API_KEY in your environment.");
   }
 
   // Proactively skip Groq for very large documents if we are in auto-select mode to avoid 413 token limits
@@ -278,4 +312,161 @@ function normalize(result: AnalysisResult): AnalysisResult {
       abbreviations: model.abbreviations || [],
     },
   };
+}
+
+const CHAT_EDIT_SYSTEM_PROMPT = `You are the academic document editing assistant.
+You are given:
+1. The current DocumentModel in JSON format (which represents the parsed structure of the document).
+2. The user's editing instruction/chat message.
+3. The selected text from the document (if any).
+
+Your task is to modify the DocumentModel JSON object to apply the requested edit.
+Make sure to follow these instructions:
+- If the user wants to remove highlighted/selected content, search for that content in the DocumentModel (chapters, sections, prelims, etc.) and remove it or replace it.
+- If the user wants to add/generate specific content in a particular place, construct the appropriate chapter or section, write the academic content (following standard academic structure and high quality), and insert/add it.
+- You can add new chapters, delete chapters, update chapter titles or introductions.
+- You can add new sections to a chapter, delete sections, or update section contents.
+- You can edit the meta information (title, author, department, keywords).
+- Do not lose other fields or structures in the DocumentModel JSON.
+- If you can't find the exact selected text, do your best to locate and edit the closest match.
+- Return a JSON object with two fields:
+  1. "model": The modified DocumentModel JSON object.
+  2. "message": A friendly, short textual response explaining the changes you made.
+
+Your output must be strict, valid JSON with ONLY these two fields:
+{
+  "model": { ... },
+  "message": "..."
+}`;
+
+export interface ChatEditInput {
+  model: DocumentModel;
+  message: string;
+  selectedText?: string;
+  preferredProvider?: AIProvider;
+}
+
+export interface ChatEditResult {
+  model: DocumentModel;
+  message: string;
+}
+
+export async function chatEditDocument(input: ChatEditInput): Promise<ChatEditResult> {
+  const providersToTry: AIProvider[] = [];
+  if (input.preferredProvider && hasKey(input.preferredProvider)) {
+    providersToTry.push(input.preferredProvider);
+  }
+  const envProvider = process.env["AI_PROVIDER"] as AIProvider | undefined;
+  if (envProvider && hasKey(envProvider) && !providersToTry.includes(envProvider)) {
+    providersToTry.push(envProvider);
+  }
+  const defaultOrder: AIProvider[] = ["custom", "groq", "gemini", "deepseek", "openrouter", "lovable"];
+  for (const p of defaultOrder) {
+    if (hasKey(p) && !providersToTry.includes(p)) {
+      providersToTry.push(p);
+    }
+  }
+
+  if (providersToTry.length === 0) {
+    throw new Error("AI is not configured. Please set GEMINI_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY, CUSTOM_API_URL, or LOVABLE_API_KEY in your environment.");
+  }
+
+  // Model input serialization (strip unneeded heavy properties)
+  const aiModelInput = { ...input.model };
+  delete aiModelInput.original;
+  delete aiModelInput.images;
+  const modelJson = JSON.stringify(aiModelInput);
+  const isTooLargeForGroq = modelJson.length > 25000;
+
+  let lastError: Error | null = null;
+
+  for (const provider of providersToTry) {
+    if (provider === "groq" && isTooLargeForGroq && input.preferredProvider !== "groq") {
+      console.log(`[AI] Skipping Groq for large model size (${modelJson.length} chars) to avoid 413 rate limit.`);
+      continue;
+    }
+
+    try {
+      const config = resolveAIProvider(provider);
+      console.log(`[AI-Chat] Attempting document edit using ${provider} with model ${config.model}...`);
+
+      const body = {
+        model: config.model,
+        messages: [
+          { role: "system", content: CHAT_EDIT_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `CURRENT DOCUMENT MODEL JSON:
+${modelJson}
+
+USER MESSAGE/INSTRUCTION:
+${input.message}
+
+SELECTED/HIGHLIGHTED TEXT (IF ANY):
+${input.selectedText || "(None)"}`,
+          },
+        ],
+        response_format: { type: "json_object" },
+      };
+
+      const response = await fetch(config.url, {
+        method: "POST",
+        headers: config.headers,
+        body: JSON.stringify(body),
+      });
+
+      if (response.status === 429) {
+        throw new Error(`Rate limit reached for ${provider}.`);
+      }
+      if (response.status === 402) {
+        throw new Error(`Credits exhausted for ${provider}.`);
+      }
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${provider} failed (${response.status}): ${errorText}`);
+      }
+
+      const payload = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const content = payload.choices?.[0]?.message?.content ?? "";
+      const jsonText = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "");
+      
+      let parsed: ChatEditResult;
+      try {
+        parsed = JSON.parse(jsonText) as ChatEditResult;
+      } catch {
+        const start = jsonText.indexOf("{");
+        const end = jsonText.lastIndexOf("}");
+        if (start < 0 || end < 0) throw new Error("The AI returned an unreadable edit response.");
+        parsed = JSON.parse(jsonText.slice(start, end + 1)) as ChatEditResult;
+      }
+
+      // Re-normalize the modified model to keep numbering/IDs correct
+      if (parsed.model) {
+        if (input.model.original) {
+          parsed.model.original = input.model.original;
+        }
+        if (input.model.images) {
+          parsed.model.images = input.model.images;
+        }
+        
+        const normalizedResult = normalize({
+          model: parsed.model,
+          understanding: {} as any,
+          health: {} as any,
+          issues: [],
+        });
+        parsed.model = normalizedResult.model;
+      }
+
+      console.log(`[AI-Chat] Document edit succeeded using ${provider}!`);
+      return parsed;
+    } catch (err: any) {
+      console.warn(`[AI-Chat] Provider ${provider} failed:`, err.message || err);
+      lastError = err;
+    }
+  }
+
+  throw new Error(`All AI edit attempts failed. Last error: ${lastError?.message || "Unknown error"}`);
 }

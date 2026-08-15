@@ -40,17 +40,17 @@ function htmlToOriginalBlocks(html: string): OriginalBlock[] {
   while ((match = pattern.exec(html)) !== null) {
     const chunk = match[0];
     if (/^<table/i.test(chunk)) {
-      const rows = chunk
-        .split(/<\/tr>/i)
-        .map((row) =>
-          row
-            .split(/<\/t[dh]>/i)
-            .map(stripTags)
-            .filter(Boolean)
-            .join("  |  "),
-        )
-        .filter(Boolean);
-      blocks.push({ type: "table", text: rows.join("\n") });
+      const rows: string[][] = [];
+      const trMatches = chunk.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+      for (const trHtml of trMatches) {
+        const cellMatches = trHtml.match(/<(?:td|th)[\s\S]*?<\/(?:td|th)>/gi) || [];
+        const cells = cellMatches.map((cellHtml) => stripTags(cellHtml));
+        if (cells.length > 0) rows.push(cells);
+      }
+      if (rows.length > 0) {
+        const mdText = rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
+        blocks.push({ type: "table", text: mdText, tableRows: rows });
+      }
       continue;
     }
     const inner = match[2] ?? match[3] ?? "";
@@ -65,6 +65,27 @@ function htmlToOriginalBlocks(html: string): OriginalBlock[] {
     else blocks.push({ type: "para", text });
   }
   return blocks;
+}
+
+function convertHtmlTablesToMarkdown(html: string): string {
+  return html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
+    const rows: string[][] = [];
+    const trMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    for (const trHtml of trMatches) {
+      const cellMatches = trHtml.match(/<(?:td|th)[\s\S]*?<\/(?:td|th)>/gi) || [];
+      const cells = cellMatches.map((cellHtml) => stripTags(cellHtml));
+      if (cells.length > 0) rows.push(cells);
+    }
+    if (rows.length === 0) return "\n[TABLE]\n";
+    const mdLines: string[] = [];
+    const header = rows[0]!;
+    mdLines.push(`| ${header.join(" | ")} |`);
+    mdLines.push(`| ${header.map(() => "---").join(" | ")} |`);
+    for (let i = 1; i < rows.length; i += 1) {
+      mdLines.push(`| ${rows[i]!.join(" | ")} |`);
+    }
+    return `\n\n${mdLines.join("\n")}\n\n`;
+  });
 }
 
 export async function extractDocument(
@@ -102,11 +123,11 @@ export async function extractDocument(
   );
 
   const tableCount = (html.match(/<table/g) || []).length;
-  const text = html
+  const htmlWithMarkdownTables = convertHtmlTablesToMarkdown(html);
+  const text = htmlWithMarkdownTables
     .replace(/<img[^>]*src="acadformat-image:(\d+)"[^>]*>/g, "\n[IMAGE:$1]\n")
     .replace(/<img[^>]*>/g, "\n[IMAGE]\n")
     .replace(/<\/(p|h1|h2|h3|h4|li|tr)>/g, "\n")
-    .replace(/<table[^>]*>/g, "\n[TABLE]\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")

@@ -28,6 +28,21 @@ const PRELIM_TITLES: Partial<Record<SectionType, string>> = {
   LIST_OF_ABBREVIATIONS: "List of Abbreviations",
 };
 
+function getSchoolFrenchName(schoolName: string): string {
+  const name = schoolName.toLowerCase();
+  if (name.includes("college of technology") || name.includes("coltech")) return "ECOLE DE TECHNOLOGIE";
+  if (name.includes("faculty of science")) return "FACULTE DES SCIENCES";
+  if (name.includes("higher technical teacher training")) return "ECOLE NORMALE SUPERIEURE DE L'ENSEIGNEMENT TECHNIQUE (ENSET)";
+  if (name.includes("polytechnic")) return "INSTITUT NATIONAL SUPERIEUR POLYTECHNIQUE (NAHPI)";
+  if (name.includes("higher teacher training")) return "ECOLE NORMALE SUPERIEURE (ENS) DE BAMBILI";
+  if (name.includes("economics")) return "FACULTE DES SCIENCES ECONOMIQUES ET DE GESTION";
+  if (name.includes("laws")) return "FACULTE DES SCIENCES JURIDIQUES ET POLITIQUES";
+  if (name.includes("arts")) return "FACULTE DES ARTS";
+  if (name.includes("health")) return "FACULTE DES SCIENCES DE LA SANTE";
+  if (name.includes("transport")) return "INSTITUT SUPERIEUR DE TRANSPORT ET LOGISTIQUE";
+  return schoolName.toUpperCase();
+}
+
 function roman(n: number): string {
   const map: [number, string][] = [
     [1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"],
@@ -67,7 +82,71 @@ function isStrayHeading(line: string): boolean {
   const text = line.trim();
   if (text.length > 80) return false;
   if (CHAPTER_PREFIX.test(text)) return true;
-  return /^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text);
+  // Match numbered headings (e.g. 1.1 Background)
+  if (/^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text)) return true;
+  
+  // Match common academic heading titles case-insensitively
+  const commonHeadings = [
+    "background of study",
+    "background of the study",
+    "statement of the problem",
+    "statement of problem",
+    "objectives of study",
+    "objectives of the study",
+    "objectives of the research",
+    "objectives of research",
+    "research questions",
+    "research question",
+    "research hypothesis",
+    "research hypotheses",
+    "significance of study",
+    "significance of the study",
+    "scope of the study",
+    "scope of study",
+    "limitations of study",
+    "limitations of the study",
+    "organisation of study",
+    "organisation of the study",
+    "definition of terms",
+    "definition of key terms",
+    "literature review",
+    "conceptual framework",
+    "theoretical framework",
+    "methodology",
+    "research design",
+    "population of study",
+    "population of the study",
+    "sample and sampling technique",
+    "instrumentation",
+    "validation of instrument",
+    "reliability of instrument",
+    "data collection procedure",
+    "data analysis procedure",
+    "ethical considerations",
+    "results and discussion",
+    "discussion of findings",
+    "summary of findings",
+    "conclusion",
+    "conclusions",
+    "recommendations",
+    "suggestions for further study",
+    "contributions to knowledge",
+    "references",
+    "appendices",
+  ];
+  const lower = text.toLowerCase().replace(/^[a-z0-9.]+\s+/i, "").trim();
+  if (commonHeadings.includes(lower)) return true;
+
+  // Support short title-cased lines without terminal punctuation
+  if (text.length > 5 && text.length < 50 && /^[A-Z]/.test(text) && !/[.!?]$/.test(text)) {
+    const words = text.split(/\s+/).filter(w => w.length > 1);
+    const capWords = words.filter(w => /^[A-Z]/.test(w));
+    if (words.length > 0 && capWords.length / words.length >= 0.7) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function paragraphs(text: string): string[] {
@@ -221,7 +300,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       const imageId = imageIndex !== undefined ? `img-${imageIndex}` : undefined;
       const exists = imageId ? finalImages.some((img) => img.id === imageId) : false;
       if (exists) {
-        blocks.push({ type: "image", text: "", imageId });
+        blocks.push({ type: "image", text: "", imageId: imageId! });
       } else {
         blocks.push({ type: "center", text: `[ Figure Image ${imageIndex || ""} ]` });
       }
@@ -324,7 +403,7 @@ function chunkBlocks(blocks: Block[]): Block[][] {
 function getTOCLevel(text: string): number {
   const trimmed = text.trim();
   const match = trimmed.match(/^(\d+(?:\.\d+)*)\b/);
-  if (match) {
+  if (match && match[1]) {
     const dots = (match[1].match(/\./g) || []).length;
     return Math.min(3, dots + 1);
   }
@@ -335,6 +414,24 @@ export interface BuildInput {
   model: DocumentModel;
   config: InstitutionConfig;
   selection: InstitutionSelection;
+}
+
+function wrapTextToLines(text: string, maxLen: number = 20): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if ((current + " " + word).length > maxLen) {
+      lines.push(current);
+      current = word;
+    } else {
+      current += " " + word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
 }
 
 /**
@@ -363,7 +460,39 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     return startNumber;
   };
 
-  const logoImages = (model.images ?? []).filter((image) => image.role === "logo");
+  let logoImages: { id: string; path: string; contentType: string; role: "logo" }[] = [];
+  const isColtech = selection.school.toLowerCase().includes("college of technology") || selection.school.toLowerCase().includes("coltech");
+  const isFinalYearWork = ["Dissertation", "Thesis", "End of Course Project"].includes(selection.documentType);
+
+  if (selection.university.toLowerCase().includes("bamenda")) {
+    if (isColtech && !isFinalYearWork) {
+      logoImages = [
+        {
+          id: "logo-uba",
+          path: "public/uba.jpg",
+          contentType: "image/jpeg",
+          role: "logo"
+        },
+        {
+          id: "logo-coltech",
+          path: "public/coltech.jpg",
+          contentType: "image/jpeg",
+          role: "logo"
+        }
+      ];
+    } else {
+      logoImages = [
+        {
+          id: "logo-uba",
+          path: "public/uba.jpg",
+          contentType: "image/jpeg",
+          role: "logo"
+        }
+      ];
+    }
+  } else {
+    logoImages = (model.images ?? []).filter((image) => image.role === "logo") as any;
+  }
 
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   model.chapters.forEach((chapter, chapterIndex) => {
@@ -391,8 +520,8 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
     // 2. Post-process to insert captions, renumber figures and tables, and record page marks
     const blocks: Block[] = [];
-    let figureIdx = 0;
-    let tableIdx = 0;
+    const consumedFigures = new Set<number>();
+    const consumedTables = new Set<number>();
     const figureMarks: { label: string; caption: string; blockIndex: number }[] = [];
     const tableMarks: { label: string; title: string; blockIndex: number }[] = [];
 
@@ -406,12 +535,23 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       }
 
       if (block.type === "image") {
-        const figure = chapter.figures[figureIdx];
+        let figIdx = chapter.figures.findIndex((fig, idx) => {
+          if (consumedFigures.has(idx)) return false;
+          const m = fig.originalLabel?.match(/\[IMAGE:(\d+)\]/i);
+          return m ? `img-${m[1]}` === block.imageId : false;
+        });
+
+        if (figIdx < 0) {
+          figIdx = chapter.figures.findIndex((_, idx) => !consumedFigures.has(idx));
+        }
+
+        const figure = figIdx >= 0 ? chapter.figures[figIdx] : undefined;
         if (figure) {
+          consumedFigures.add(figIdx);
           const label =
             config.figureNumbering === "chapter"
-              ? `Figure ${chapterNumber}.${figureIdx + 1}`
-              : `Figure ${listOfFigures.length + figureIdx + 1}`;
+              ? `Figure ${chapterNumber}.${figIdx + 1}`
+              : `Figure ${listOfFigures.length + figIdx + 1}`;
 
           blocks.push({
             ...block,
@@ -420,17 +560,18 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
           figureMarks.push({ label, caption: figure.caption, blockIndex: blocks.length });
           blocks.push({ type: "caption", text: `${label}: ${figure.caption}` });
-          figureIdx += 1;
         } else {
           blocks.push(block);
         }
       } else if (block.type === "table") {
-        const table = chapter.tables[tableIdx];
+        let tabIdx = chapter.tables.findIndex((_, idx) => !consumedTables.has(idx));
+        const table = tabIdx >= 0 ? chapter.tables[tabIdx] : undefined;
         if (table) {
+          consumedTables.add(tabIdx);
           const label =
             config.tableNumbering === "chapter"
-              ? `Table ${chapterNumber}.${tableIdx + 1}`
-              : `Table ${listOfTables.length + tableIdx + 1}`;
+              ? `Table ${chapterNumber}.${tabIdx + 1}`
+              : `Table ${listOfTables.length + tabIdx + 1}`;
 
           tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
           blocks.push({ type: "caption", text: `${label}: ${table.title}` });
@@ -438,7 +579,6 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
             ...block,
             text: table.title,
           });
-          tableIdx += 1;
         } else {
           blocks.push(block);
         }
@@ -450,18 +590,29 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     });
 
     // Handle any figures/tables defined in metadata but not encountered in section content:
-    for (let f = figureIdx; f < chapter.figures.length; f += 1) {
+    for (let f = 0; f < chapter.figures.length; f += 1) {
+      if (consumedFigures.has(f)) continue;
       const figure = chapter.figures[f]!;
       const label =
         config.figureNumbering === "chapter"
           ? `Figure ${chapterNumber}.${f + 1}`
           : `Figure ${listOfFigures.length + f + 1}`;
 
-      const imageId = `img-${f}`;
-      const exists = model.images?.some((img) => img.id === imageId);
+      let imageId: string | undefined;
+      const match = figure.originalLabel?.match(/\[IMAGE:(\d+)\]/i);
+      if (match) {
+        imageId = `img-${match[1]}`;
+      } else {
+        imageId = `img-${f}`;
+      }
 
-      if (exists) {
-        blocks.push({ type: "image", text: figure.caption, imageId });
+      const exactMatch = model.images?.find((img) => img.id === imageId);
+      const fallbackImage = model.images?.find((img) => img.role === "figure") || model.images?.[f];
+
+      if (exactMatch) {
+        blocks.push({ type: "image", text: figure.caption, imageId: exactMatch.id });
+      } else if (fallbackImage) {
+        blocks.push({ type: "image", text: figure.caption, imageId: fallbackImage.id });
       } else {
         blocks.push({ type: "center", text: `[ ${figure.originalLabel || figure.kind || "Figure"} ]` });
       }
@@ -469,7 +620,8 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       blocks.push({ type: "caption", text: `${label}: ${figure.caption}` });
     }
 
-    for (let t = tableIdx; t < chapter.tables.length; t += 1) {
+    for (let t = 0; t < chapter.tables.length; t += 1) {
+      if (consumedTables.has(t)) continue;
       const table = chapter.tables[t]!;
       const label =
         config.tableNumbering === "chapter"
@@ -478,7 +630,15 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
       tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
       blocks.push({ type: "caption", text: `${label}: ${table.title}` });
-      blocks.push({ type: "center", text: `[ ${table.originalLabel || "Table content"} ]` });
+      if (table.originalLabel && table.originalLabel.includes("|")) {
+        const rows = table.originalLabel
+          .split("\n")
+          .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
+          .filter((r) => r.length > 0);
+        blocks.push({ type: "table", text: table.originalLabel, tableRows: rows });
+      } else {
+        blocks.push({ type: "center", text: `[ ${table.originalLabel || "Table content"} ]` });
+      }
     }
 
     const startPage = pushBody(`Chapter ${chapterNumber}`, blocks, "body");
@@ -554,7 +714,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   const prelimPages: RenderedPage[] = [];
   const prelimSectionStarts = new Map<SectionType, number>();
 
-  const addPrelim = (type: SectionType, sectionTitle: string, blocks: Block[], kind: "cover" | "preliminary") => {
+  const addPrelim = (type: SectionType, sectionTitle: string, blocks: Block[], kind: "cover" | "preliminary", hasPageBorder = false) => {
     const startIndex = prelimPages.length;
     prelimSectionStarts.set(type, startIndex);
     chunkBlocks(blocks).forEach((pageBlocks, i) => {
@@ -565,46 +725,125 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         sectionTitle,
         startsSection: i === 0,
         blocks: pageBlocks,
+        hasPageBorder: hasPageBorder && i === 0,
       });
     });
   };
 
   const meta = model.meta;
-  const coverBlocks: Block[] = [
-    ...(logoImages.length > 0
-      ? [
-          {
-            type: "logos" as const,
-            text: "",
-            imageIds: logoImages
-              .slice(0, Math.max(1, config.coverLogoCount))
-              .map((image) => image.id),
-          },
-        ]
-      : []),
-    { type: "center", text: "REPUBLIC OF CAMEROON" },
-    { type: "center", text: "Peace – Work – Fatherland" },
-    { type: "center", text: selection.university.toUpperCase() },
-    { type: "center", text: selection.school.toUpperCase() },
-    { type: "center", text: `DEPARTMENT OF ${(meta.department || selection.department).toUpperCase()}` },
-    { type: "spacer", text: "" },
-    { type: "title", text: meta.title.toUpperCase() },
-    { type: "spacer", text: "" },
-    {
-      type: "center",
-      text: `${workLabel(selection.documentType, selection.level)} submitted in partial fulfilment of the requirements for the award of ${selection.level}`,
-    },
-    { type: "spacer", text: "" },
-    { type: "center", text: (meta.author || "AUTHOR NAME").toUpperCase() },
-    { type: "center", text: `Registration Number: ${meta.registrationNumber || "—"}` },
-    { type: "spacer", text: "" },
-    { type: "center", text: "SUPERVISOR(S):" },
-    ...(meta.supervisors?.length
-      ? meta.supervisors.map((s) => ({ type: "center" as const, text: s }))
-      : [{ type: "center" as const, text: "—" }]),
-    { type: "spacer", text: "" },
-    { type: "center", text: (meta.monthYear || "").toUpperCase() },
-  ];
+  const isUba = selection.university.toLowerCase().includes("bamenda");
+  const coverBlocks: Block[] = [];
+
+  if (isUba && isFinalYearWork) {
+    const schoolUpper = selection.school.toUpperCase();
+    const leftSchoolLines = schoolUpper.startsWith("THE ")
+      ? wrapTextToLines(schoolUpper, 20)
+      : wrapTextToLines("THE " + schoolUpper, 20);
+
+    coverBlocks.push(
+      { type: "center" as const, text: "THE UNIVERSITY OF BAMENDA", bold: true, size: 16 },
+      {
+        type: "bilingual" as const,
+        text: "",
+        left: leftSchoolLines,
+        right: [
+          "DEPARTMENT OF",
+          (meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()
+        ],
+        imageIds: ["logo-uba"]
+      },
+      { type: "spacer" as const, text: "" },
+      {
+        type: "title" as const,
+        text: meta.title.toUpperCase(),
+        borderBox: true
+      },
+      { type: "spacer" as const, text: "" },
+      {
+        type: "center" as const,
+        text: `A ${workLabel(selection.documentType, selection.level)} Submitted to the Department of ${(meta.department || selection.department || "Computer Engineering")} in the ${selection.school} of the University of Bamenda in Partial Fulfillment of the Requirements for the Award of a ${selection.level || "Bachelor of Science"} Degree in ${(meta.department || selection.department || "Computer Engineering")}.`,
+        italic: true
+      },
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: "BY:", bold: true },
+      { type: "center" as const, text: (meta.author || "AUTHOR NAME").toUpperCase(), bold: true },
+      { type: "center" as const, text: `REGISTRATION NUMBER: ${(meta.registrationNumber || "—").toUpperCase()}`, bold: true },
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: "SUPERVISOR(S):", bold: true },
+      ...(meta.supervisors?.length
+        ? meta.supervisors.map((s) => ({ type: "center" as const, text: s.toUpperCase(), bold: true }))
+        : [{ type: "center" as const, text: "—", bold: true }]),
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: (meta.monthYear || "").toUpperCase(), bold: true }
+    );
+  } else {
+    coverBlocks.push(
+      ...(logoImages.length > 0 && !isUba
+        ? [
+            {
+              type: "logos" as const,
+              text: "",
+              imageIds: logoImages.map((image) => image.id),
+            },
+          ]
+        : []),
+      ...(isUba
+        ? [
+            {
+              type: "ubaHeader" as const,
+              text: "",
+              left: (() => {
+                const lines = [
+                  "REPUBLIC OF CAMEROON",
+                  "Peace – work – Fatherland",
+                  "REPUBLIQUE DU CAMEROUN",
+                  "Paix – Travail - Patrie",
+                  "",
+                  "THE UNIVERSITY OF BAMENDA",
+                  "P.O. Box 39, Bambili, Mezam Division, NW Region, Cameroon",
+                ];
+                if (isColtech) {
+                  lines.push(
+                    "Tel.: (237) 683 79 86 43 - Fax (237) 233 366 030, Website: www.coltech.uniba.cm",
+                    "THE COLLEGE OF TECHNOLOGY (COLTECH) ECOLE DE TECHNOLOGIE",
+                    "Building Capacities in Innovative Technology for sustainable Development"
+                  );
+                } else {
+                  lines.push(
+                    "",
+                    selection.school.toUpperCase()
+                  );
+                }
+                return lines;
+              })(),
+              imageIds: logoImages.map((image) => image.id),
+            },
+          ]
+        : [
+            { type: "center" as const, text: "REPUBLIC OF CAMEROON" },
+            { type: "center" as const, text: "Peace – Work – Fatherland" },
+            { type: "center" as const, text: selection.university.toUpperCase() },
+            { type: "center" as const, text: selection.school.toUpperCase() },
+          ]),
+      { type: "center" as const, text: `DEPARTMENT OF ${(meta.department || selection.department).toUpperCase()}` },
+      { type: "spacer" as const, text: "" },
+      { type: "title" as const, text: meta.title.toUpperCase() },
+      { type: "spacer" as const, text: "" },
+      {
+        type: "center" as const,
+        text: `${workLabel(selection.documentType, selection.level)} submitted in partial fulfilment of the requirements for the award of ${selection.level}`,
+      },
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: (meta.author || "AUTHOR NAME").toUpperCase() },
+      { type: "center" as const, text: `Registration Number: ${meta.registrationNumber || "—"}` },
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: "SUPERVISOR(S):" },
+      ...(meta.supervisors?.length
+        ? meta.supervisors.map((s) => ({ type: "center" as const, text: s }))
+        : [{ type: "center" as const, text: "—" }]),
+      { type: "center" as const, text: (meta.monthYear || "").toUpperCase() }
+    );
+  }
 
   // Construct complete Table of Contents entries.
   // First, we populate preliminary entries with placeholders, followed by the main body entries.
@@ -686,6 +925,104 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
     const existing = model.preliminary.find((p) => p.type === type);
     const content = existing?.content?.trim();
+
+    if (isUba && isFinalYearWork) {
+      if (type === "CERTIFICATION") {
+        const isMaster = selection.level?.toLowerCase().includes("master");
+        const titleText = isMaster ? "CERTIFICATION OF CORRECTIONS AFTER DEFENSE" : "CERTIFICATION";
+        
+        const defaultContent = `This is to certify that this dissertation titled “${(meta.title || "TITLE OF STUDY").toUpperCase()}” is the original work of ${(meta.author || "AUTHOR NAME").toUpperCase()}. This work is submitted in partial fulfillment of the requirements for the award of a ${selection.level || "Master of Science"} Degree in ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()} in the ${selection.school || "College of Technology"} of The University of Bamenda.`;
+        const actualContent = content || defaultContent;
+        
+        const blocks: Block[] = [
+          { type: "heading1", text: titleText },
+          { type: "spacer", text: "" },
+          { type: "para", text: actualContent },
+          { type: "spacer", text: "" },
+        ];
+
+        if (isMaster) {
+          blocks.push(
+            { type: "para", text: `Supervisor : __________________________________________________________________`, bold: true },
+            { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR NAME").toUpperCase()}`, bold: true },
+            { type: "spacer", text: "" },
+            { type: "para", text: `The Head of Department : ______________________________________________________`, bold: true },
+            { type: "para", text: `Pr. ${(meta.headOfDepartment || "HEAD OF DEPARTMENT NAME").toUpperCase()}`, bold: true },
+            { type: "spacer", text: "" },
+            { type: "para", text: `The Director : ________________________________________________________________`, bold: true },
+            { type: "para", text: `Pr. ${(meta.director || "DIRECTOR NAME").toUpperCase()}`, bold: true }
+          );
+        } else {
+          blocks.push(
+            { type: "para", text: `Supervisor (s)`, bold: true },
+            { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR 1").toUpperCase()} : __________________________________________________` },
+            ...(meta.supervisors && meta.supervisors.length > 1
+              ? meta.supervisors.slice(1).map(s => ({
+                  type: "para" as const,
+                  text: `Pr. ${s.toUpperCase()} : __________________________________________________`
+                }))
+              : [{ type: "para" as const, text: `Pr. ${(meta.supervisors?.[1] || "SUPERVISOR 2").toUpperCase()} : __________________________________________________` }]),
+            { type: "spacer", text: "" },
+            { type: "para", text: `The Head of Department`, bold: true },
+            { type: "para", text: `Pr. ${(meta.headOfDepartment || "HEAD OF DEPARTMENT").toUpperCase()} : __________________________________________________` },
+            { type: "spacer", text: "" },
+            { type: "para", text: `The Director`, bold: true },
+            { type: "para", text: `Pr. ${(meta.director || "DIRECTOR").toUpperCase()} : __________________________________________________` }
+          );
+        }
+
+        addPrelim(type, titleText, blocks, "preliminary", true);
+        continue;
+      }
+
+      if (type === "DECLARATION") {
+        const defaultContent = `I, ${(meta.author || "AUTHOR NAME").toUpperCase()}, registration N° : ${(meta.registrationNumber || "—").toUpperCase()}, in the Department of ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()} in the ${selection.school || "College of Technology"} of The University of Bamenda hereby declare that this work titled “${(meta.title || "TITLE OF STUDY").toUpperCase()}” is my original work. It has not been presented in any application for a degree or any academic pursuit. I have acknowledged all borrowed ideas nationally and internationally through citations.`;
+        const actualContent = content || defaultContent;
+
+        addPrelim(type, "Declaration of Originality of Study", [
+          { type: "heading1", text: "DECLARATION OF ORIGINALITY OF STUDY" },
+          { type: "spacer", text: "" },
+          { type: "para", text: actualContent },
+          { type: "spacer", text: "" },
+          { type: "spacer", text: "" },
+          { type: "para", text: `Date: ________________________            Signature of author ____________________`, bold: true }
+        ], "preliminary");
+        continue;
+      }
+
+      if (type === "ACCEPTANCE") {
+        const isPhD = selection.level?.toLowerCase().includes("phd") || selection.level?.toLowerCase().includes("doctor");
+        const titleText = isPhD ? "ACCEPTANCE OF THESIS" : "ACCEPTANCE OF DISSERTATION";
+        const committeeLabel = isPhD ? "PhD Thesis Committee" : "Master’s Dissertation Committee";
+
+        const defaultContent = `Having met the stipulated requirements, this dissertation entitled “${(meta.title || "TITLE OF STUDY").toUpperCase()}” has been accepted by the Postgraduate School of The University of Bamenda in partial fulfillment of the requirements for the award of a ${selection.level || "Master of Science"} Degree in ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()} (Specialty : ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()}).`;
+        const actualContent = content || defaultContent;
+
+        const blocks: Block[] = [
+          { type: "heading1", text: titleText },
+          { type: "spacer", text: "" },
+          { type: "para", text: actualContent },
+          { type: "spacer", text: "" },
+          { type: "para", text: `Chairperson, ${committeeLabel} : ___________________________`, bold: true },
+          { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR NAME").toUpperCase()}`, bold: true },
+          { type: "spacer", text: "" },
+          { type: "para", text: `                                            Date : ___________________________`, bold: true }
+        ];
+
+        if (isPhD) {
+          blocks.push(
+            { type: "spacer", text: "" },
+            { type: "para", text: `Mathias Fru Fonteh, PhD`, bold: true },
+            { type: "para", text: `Professor of Water Resources Management`, italic: true },
+            { type: "para", text: `Director`, bold: true }
+          );
+        }
+
+        addPrelim(type, titleText, blocks, "preliminary");
+        continue;
+      }
+    }
+
     addPrelim(type, title, [
       { type: "heading1", text: title.toUpperCase() },
       content
@@ -699,14 +1036,19 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
   // Number pages: cover unnumbered unless required, prelims roman, body arabic.
   let romanCounter = 0;
-  prelimPages.forEach((page) => {
-    if (page.kind === "cover" && !config.coverPageNumbered) {
-      romanCounter += 1;
-      page.numberLabel = "";
-      return;
-    }
+  const startNumberingFrom = config.startPageNumberingFrom;
+  const startIndex = startNumberingFrom ? prelimSectionStarts.get(startNumberingFrom) : undefined;
+
+  prelimPages.forEach((page, i) => {
     romanCounter += 1;
-    page.numberLabel = config.preliminaryNumbering === "roman-lower" ? roman(romanCounter) : "";
+    const isUnnumbered = page.sectionTitle === "Cover Page" || page.sectionTitle === "Title Page";
+    const isBeforeStart = startNumberingFrom && startIndex !== undefined && i < startIndex;
+
+    if (isUnnumbered || isBeforeStart) {
+      page.numberLabel = "";
+    } else {
+      page.numberLabel = config.preliminaryNumbering === "roman-lower" ? roman(romanCounter) : "";
+    }
   });
 
   // Map preliminary sections to their resolved page numbers
@@ -756,7 +1098,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     listOfFigures,
     listOfTables,
     listOfAbbreviations,
-    images: model.images ?? [],
+    images: [...(model.images ?? []), ...logoImages],
     generatedAt: new Date().toISOString(),
   };
 }

@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Gemini and Vercel local folders
+.gemini/
+.vercel/

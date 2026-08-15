@@ -36,15 +36,46 @@ export function OriginalPreview({
                 {block.text}
               </h3>
             );
-          if (block.type === "table")
+          if (block.type === "table") {
+            const rows =
+              block.tableRows && block.tableRows.length > 0
+                ? block.tableRows
+                : (block.text || "")
+                    .split("\n")
+                    .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
+                    .filter((r) => r.length > 0);
+
+            if (rows.length === 0) return null;
+
             return (
-              <pre
-                key={index}
-                className="my-3 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-secondary/40 p-3 text-xs"
-              >
-                {block.text}
-              </pre>
+              <div key={index} className="my-4 overflow-x-auto border border-black">
+                <table className="w-full border-collapse text-left text-xs font-serif text-black">
+                  <thead>
+                    {rows.slice(0, 1).map((row, rIdx) => (
+                      <tr key={rIdx} className="border-b border-black bg-neutral-100">
+                        {row.map((cell, cIdx) => (
+                          <th key={cIdx} className="p-2 font-bold text-black align-middle border-r border-black last:border-r-0">
+                            {cell}
+                          </th>
+                        ))}
+                      </tr>
+                    ))}
+                  </thead>
+                  <tbody>
+                    {rows.slice(1).map((row, rIdx) => (
+                      <tr key={rIdx} className="border-b border-black last:border-b-0">
+                        {row.map((cell, cIdx) => (
+                          <td key={cIdx} className="p-2 align-middle text-black border-r border-black last:border-r-0">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             );
+          }
           return (
             <p key={index} className="doc-para">
               {block.text}

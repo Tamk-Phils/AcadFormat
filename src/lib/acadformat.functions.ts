@@ -6,7 +6,7 @@ import { resolveConfig, type InstitutionSelection } from "./institutions";
 import { buildDocx, type ImageAsset } from "./docx-export.server";
 import { buildPdf } from "./pdf-export.server";
 import { extractDocument } from "./extract.server";
-import { analyzeWithAI } from "./ai.server";
+import { analyzeWithAI, chatEditDocument } from "./ai.server";
 import { restoreVerbatimContent } from "./verbatim";
 import { ensureDocumentsBucket } from "./storage-bootstrap.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -162,18 +162,33 @@ export const exportDocx = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
-      .select("file_name, final_document, institution")
+      .select("file_name, model, institution")
       .eq("id", data.documentId)
       .single();
-    if (error || !row?.final_document) throw new Error("Format the document before exporting.");
+    if (error || !row?.model) throw new Error("Format the document before exporting.");
 
     const selection = row.institution as unknown as InstitutionSelection;
-    const final = row.final_document as unknown as { images?: DocumentImage[] };
+    const model = row.model as unknown as DocumentModel;
+    const config = resolveConfig(selection ?? { configId: "" });
+    const final = buildFinalDocument({ model, config, selection });
+
     const images = new Map<string, ImageAsset>();
     for (const image of final.images ?? []) {
-      const file = await supabaseAdmin.storage.from("documents").download(image.path);
-      if (file.error || !file.data) continue;
-      const bytes = new Uint8Array(await file.data.arrayBuffer());
+      let bytes: Uint8Array;
+      if (image.path.startsWith("public/") || image.path.startsWith("logo-")) {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+        const filePath = path.join(process.cwd(), image.path.startsWith("public/") ? image.path : `public/${image.path}`);
+        if (fs.existsSync(filePath)) {
+          bytes = new Uint8Array(fs.readFileSync(filePath));
+        } else {
+          continue;
+        }
+      } else {
+        const file = await supabaseAdmin.storage.from("documents").download(image.path);
+        if (file.error || !file.data) continue;
+        bytes = new Uint8Array(await file.data.arrayBuffer());
+      }
       images.set(image.id, {
         data: bytes,
         type: /jpe?g/i.test(image.contentType)
@@ -186,8 +201,8 @@ export const exportDocx = createServerFn({ method: "POST" })
       });
     }
     const base64 = await buildDocx(
-      row.final_document as never,
-      resolveConfig(selection ?? { configId: "" }),
+      final as never,
+      config,
       images,
     );
     return { base64, fileName: row.file_name.replace(/\.(docx|pdf)$/i, "") + " — formatted.docx" };
@@ -199,25 +214,41 @@ export const exportPdf = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
-      .select("file_name, final_document, institution")
+      .select("file_name, model, institution")
       .eq("id", data.documentId)
       .single();
-    if (error || !row?.final_document) throw new Error("Format the document before exporting.");
+    if (error || !row?.model) throw new Error("Format the document before exporting.");
 
     const selection = row.institution as unknown as InstitutionSelection;
-    const final = row.final_document as unknown as { images?: DocumentImage[] };
+    const model = row.model as unknown as DocumentModel;
+    const config = resolveConfig(selection ?? { configId: "" });
+    const final = buildFinalDocument({ model, config, selection });
+
     const images = new Map<string, { data: Uint8Array; contentType: string }>();
     for (const image of final.images ?? []) {
-      const file = await supabaseAdmin.storage.from("documents").download(image.path);
-      if (file.error || !file.data) continue;
+      let bytes: Uint8Array;
+      if (image.path.startsWith("public/") || image.path.startsWith("logo-")) {
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+        const filePath = path.join(process.cwd(), image.path.startsWith("public/") ? image.path : `public/${image.path}`);
+        if (fs.existsSync(filePath)) {
+          bytes = new Uint8Array(fs.readFileSync(filePath));
+        } else {
+          continue;
+        }
+      } else {
+        const file = await supabaseAdmin.storage.from("documents").download(image.path);
+        if (file.error || !file.data) continue;
+        bytes = new Uint8Array(await file.data.arrayBuffer());
+      }
       images.set(image.id, {
-        data: new Uint8Array(await file.data.arrayBuffer()),
+        data: bytes,
         contentType: image.contentType,
       });
     }
     const base64 = await buildPdf(
-      row.final_document as never,
-      resolveConfig(selection ?? { configId: "" }),
+      final as never,
+      config,
       images,
     );
     return { base64, fileName: row.file_name.replace(/\.(docx|pdf)$/i, "") + " — formatted.pdf" };
@@ -256,10 +287,14 @@ export const getAssetUrls = createServerFn({ method: "POST" })
     const final = row?.final_document as unknown as { images?: DocumentImage[] } | null;
     const urls: Record<string, string> = {};
     for (const image of final?.images ?? []) {
-      const signed = await context.supabase.storage
-        .from("documents")
-        .createSignedUrl(image.path, 60 * 60);
-      if (signed.data?.signedUrl) urls[image.id] = signed.data.signedUrl;
+      if (image.path.startsWith("public/") || image.path.startsWith("logo-")) {
+        urls[image.id] = image.path.startsWith("public/") ? image.path.replace("public/", "/") : `/${image.path}`;
+      } else {
+        const signed = await context.supabase.storage
+          .from("documents")
+          .createSignedUrl(image.path, 60 * 60);
+        if (signed.data?.signedUrl) urls[image.id] = signed.data.signedUrl;
+      }
     }
     return { urls };
   });
@@ -316,3 +351,49 @@ function applyApprovedCorrections(
 function matches(target: string, ...candidates: (string | undefined)[]) {
   return candidates.some((candidate) => candidate && target.includes(candidate.toLowerCase()));
 }
+
+export const chatEditDocumentFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (data: {
+      documentId: string;
+      message: string;
+      selectedText?: string;
+      selection: InstitutionSelection;
+    }) => data
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: row, error } = await supabase
+      .from("documents")
+      .select("id, model")
+      .eq("id", data.documentId)
+      .single();
+    if (error || !row?.model) throw new Error("This document has not been analysed yet.");
+
+    const chatInput: any = {
+      model: row.model as unknown as DocumentModel,
+      message: data.message,
+    };
+    if (data.selectedText) {
+      chatInput.selectedText = data.selectedText;
+    }
+    const result = await chatEditDocument(chatInput);
+
+    // Rebuild final document after edit
+    const config = resolveConfig(data.selection);
+    const final = buildFinalDocument({ model: result.model, config, selection: data.selection });
+    const audit = auditFinalDocument(final, result.model);
+
+    await supabase
+      .from("documents")
+      .update({
+        status: "formatted",
+        model: toJson(result.model),
+        final_document: toJson(final),
+        final_audit: toJson(audit),
+      })
+      .eq("id", row.id);
+
+    return { ok: true as const, message: result.message, audit };
+  });

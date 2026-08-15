@@ -52,6 +52,7 @@ export interface InstitutionConfig {
   preliminaryNumbering: "roman-lower" | "none";
   bodyNumbering: "arabic";
   coverPageNumbered: boolean;
+  startPageNumberingFrom?: SectionType;
   /** Number of institutional logos on the cover page (COLTECH uses UB + COLTECH). */
   coverLogoCount: number;
   preliminaryOrder: SectionType[];
@@ -76,6 +77,7 @@ export const COLTECH_CONFIG: InstitutionConfig = {
   preliminaryNumbering: "roman-lower",
   bodyNumbering: "arabic",
   coverPageNumbered: false,
+  startPageNumberingFrom: "COPYRIGHT",
   coverLogoCount: 2,
   preliminaryOrder: [
     "COVER_PAGE",
@@ -228,6 +230,114 @@ export const ASSIGNMENT_CONFIG: InstitutionConfig = {
   ],
 };
 
+export const NAHPI_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "nahpi-project",
+  label: "NAHPI — Engineering Project",
+  source: "Format of Student Projects, National Higher Polytechnic Institute (NAHPI)",
+  notes: [
+    "NAHPI formatting standard for engineering and polytechnic projects.",
+    "Times New Roman 12pt, 1.5 line spacing, 1.25 inch left margin.",
+    "APA referencing style.",
+  ]
+};
+
+export const FS_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "fs-project",
+  label: "Faculty of Science — Project Report",
+  source: "Formatting Guidelines, Faculty of Science, UBa",
+  notes: [
+    "Faculty of Science project formatting standard.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA referencing style.",
+  ]
+};
+
+export const FEMS_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "fems-project",
+  label: "FEMS — Project / Dissertation",
+  source: "Formatting Guidelines, Faculty of Economics and Management Sciences (FEMS)",
+  notes: [
+    "FEMS project formatting standard.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA referencing style.",
+  ]
+};
+
+export const HTTTC_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "htttc-project",
+  label: "HTTTC — Project Report",
+  source: "Formatting Guidelines, Higher Technical Teacher Training College (HTTTC)",
+  notes: [
+    "HTTTC formatting standard for student project reports.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA referencing style.",
+  ]
+};
+
+export const HTTC_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "httc-project",
+  label: "HTTC — Project Report",
+  source: "Formatting Guidelines, Higher Teacher Training College (HTTC) Bambili",
+  notes: [
+    "HTTC formatting standard for teacher training reports.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA referencing style.",
+  ]
+};
+
+export const FLPS_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "flps-project",
+  label: "FLPS — Thesis / Dissertation",
+  source: "Formatting Guidelines, Faculty of Law and Political Science (FLPS)",
+  notes: [
+    "FLPS formatting standard for legal research, thesis and dissertations.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA/Oxford referencing style.",
+  ]
+};
+
+export const FA_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "fa-project",
+  label: "Faculty of Arts — Dissertation",
+  source: "Formatting Guidelines, Faculty of Arts (FA), UBa",
+  notes: [
+    "Faculty of Arts formatting standard for literature, humanities and language dissertations.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "MLA/APA referencing style.",
+  ]
+};
+
+export const FHS_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "fhs-project",
+  label: "Faculty of Health Sciences — Research Project",
+  source: "Formatting Guidelines, Faculty of Health Sciences (FHS)",
+  notes: [
+    "FHS formatting standard for medical, nursing and laboratory sciences research projects.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "Vancouver/APA referencing style.",
+  ]
+};
+
+export const HITL_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "hitl-project",
+  label: "HITL — Project Report",
+  source: "Formatting Guidelines, Higher Institute of Transport and Logistics (HITL)",
+  notes: [
+    "HITL formatting standard for transport and logistics reports.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA referencing style.",
+  ]
+};
+
 export const UNIVERSITIES = [
   {
     name: "The University of Bamenda",
@@ -247,17 +357,17 @@ export const UNIVERSITIES = [
       },
       {
         name: "Faculty of Science",
-        configId: COMMON_CONFIG.id,
+        configId: FS_CONFIG.id,
         departments: ["Computer Science", "Physics", "Chemistry", "Biology"],
       },
       {
         name: "Higher Technical Teacher Training College (HTTTC)",
-        configId: COMMON_CONFIG.id,
+        configId: HTTTC_CONFIG.id,
         departments: ["Computer Science", "Electrical Engineering", "Civil Engineering"],
       },
       {
         name: "National Higher Polytechnic Institute (NAHPI)",
-        configId: COMMON_CONFIG.id,
+        configId: NAHPI_CONFIG.id,
         departments: [
           "Computer Engineering",
           "Electrical and Electronic Engineering",
@@ -270,7 +380,7 @@ export const UNIVERSITIES = [
       },
       {
         name: "Higher Teacher Training College (HTTC) Bambili",
-        configId: COMMON_CONFIG.id,
+        configId: HTTC_CONFIG.id,
         departments: [
           "Computer Science",
           "Mathematics",
@@ -286,7 +396,7 @@ export const UNIVERSITIES = [
       },
       {
         name: "Faculty of Economics and Management Sciences (FEMS)",
-        configId: COMMON_CONFIG.id,
+        configId: FEMS_CONFIG.id,
         departments: [
           "Accountancy",
           "Banking and Finance",
@@ -298,12 +408,12 @@ export const UNIVERSITIES = [
       },
       {
         name: "Faculty of Law and Political Science (FLPS)",
-        configId: COMMON_CONFIG.id,
+        configId: FLPS_CONFIG.id,
         departments: ["English Law", "French Law", "Political Science", "International Relations"],
       },
       {
         name: "Faculty of Arts (FA)",
-        configId: COMMON_CONFIG.id,
+        configId: FA_CONFIG.id,
         departments: [
           "English",
           "French",
@@ -316,7 +426,7 @@ export const UNIVERSITIES = [
       },
       {
         name: "Faculty of Health Sciences (FHS)",
-        configId: COMMON_CONFIG.id,
+        configId: FHS_CONFIG.id,
         departments: [
           "Medicine",
           "Nursing",
@@ -328,12 +438,12 @@ export const UNIVERSITIES = [
       },
       {
         name: "Higher Institute of Transport and Logistics (HITL)",
-        configId: COMMON_CONFIG.id,
+        configId: HITL_CONFIG.id,
         departments: ["Transport and Logistics", "Supply Chain Management"],
       },
       {
         name: "College of Agriculture and Veterinary Medicine (COLTECH-AVM)",
-        configId: COMMON_CONFIG.id,
+        configId: COLTECH_CONFIG.id,
         departments: ["Animal Production", "Crop Production", "Veterinary Medicine"],
       },
     ],
@@ -419,7 +529,17 @@ export function getConfig(configId: string): InstitutionConfig {
   if (configId === ASSIGNMENT_CONFIG.id) return ASSIGNMENT_CONFIG;
   if (configId === INTERNSHIP_CONFIG.id) return INTERNSHIP_CONFIG;
   if (configId === COLTECH_INTERNSHIP_CONFIG.id) return COLTECH_INTERNSHIP_CONFIG;
-  return configId === COLTECH_CONFIG.id ? COLTECH_CONFIG : COMMON_CONFIG;
+  if (configId === COLTECH_CONFIG.id) return COLTECH_CONFIG;
+  if (configId === NAHPI_CONFIG.id) return NAHPI_CONFIG;
+  if (configId === FS_CONFIG.id) return FS_CONFIG;
+  if (configId === FEMS_CONFIG.id) return FEMS_CONFIG;
+  if (configId === HTTTC_CONFIG.id) return HTTTC_CONFIG;
+  if (configId === HTTC_CONFIG.id) return HTTC_CONFIG;
+  if (configId === FLPS_CONFIG.id) return FLPS_CONFIG;
+  if (configId === FA_CONFIG.id) return FA_CONFIG;
+  if (configId === FHS_CONFIG.id) return FHS_CONFIG;
+  if (configId === HITL_CONFIG.id) return HITL_CONFIG;
+  return COMMON_CONFIG;
 }
 
 /**

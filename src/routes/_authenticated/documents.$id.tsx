@@ -27,7 +27,9 @@ import {
   formatDocument,
   getAssetUrls,
   getOriginalDocument,
+  chatEditDocumentFn,
 } from "@/lib/acadformat.functions";
+import { buildFinalDocument, auditFinalDocument } from "@/lib/document-build";
 import {
   ACADEMIC_LEVEL_NAMES,
   DOCUMENT_TYPES,
@@ -76,8 +78,13 @@ function Workspace() {
   const runExport = useServerFn(exportDocx);
   const runExportPdf = useServerFn(exportPdf);
   const fetchAssetUrls = useServerFn(getAssetUrls);
-  const fetchOriginal = useServerFn(getOriginalDocument);
+  const runOriginal = useServerFn(getOriginalDocument);
+  const runChatEdit = useServerFn(chatEditDocumentFn);
+  
   const [busy, setBusy] = useState<string | null>(null);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [selectedText, setSelectedText] = useState("");
 
   const doc = useQuery({
     queryKey: ["document", id],
@@ -104,11 +111,6 @@ function Workspace() {
   const status = doc.data?.status ?? "uploaded";
   const understanding = doc.data?.understanding as Understanding | null;
   const health = doc.data?.health as HealthReport | null;
-  const final = doc.data?.final_document as FinalDocument | null;
-  const audit = doc.data?.final_audit as
-    | { passed: boolean; pageCount: number; findings: string[] }
-    | null;
-  const saved = doc.data?.institution as InstitutionSelection | null;
 
   const [selection, setSelection] = useState<InstitutionSelection>({
     university: UNIVERSITIES[0].name,
@@ -119,9 +121,69 @@ function Workspace() {
     configId: UNIVERSITIES[0].schools[0].configId,
   });
 
+  const saved = doc.data?.institution as InstitutionSelection | null;
+
   useEffect(() => {
     if (saved) setSelection(saved);
   }, [saved]);
+
+  const updateSelection = async (updated: Partial<InstitutionSelection>) => {
+    const nextSel = { ...selection, ...updated };
+    setSelection(nextSel);
+    await supabase.from("documents").update({ institution: nextSel as any }).eq("id", id);
+    queryClient.setQueryData(["document", id], (prev: any) => {
+      if (!prev) return prev;
+      return { ...prev, institution: nextSel };
+    });
+  };
+
+  const final = useMemo(() => {
+    if (!doc.data?.model) return null;
+    try {
+      const config = resolveConfig(selection);
+      return buildFinalDocument({
+        model: doc.data.model as any,
+        config,
+        selection,
+      });
+    } catch (e) {
+      console.error("Local build final document failed", e);
+      return doc.data?.final_document as FinalDocument | null;
+    }
+  }, [doc.data?.model, selection]);
+
+  const audit = useMemo(() => {
+    if (!final || !doc.data?.model) return null;
+    try {
+      return auditFinalDocument(final, doc.data.model as any);
+    } catch (e) {
+      console.error("Local audit failed", e);
+      return doc.data?.final_audit as any;
+    }
+  }, [final, doc.data?.model]);
+
+  useEffect(() => {
+    const handleSelection = () => {
+      const selection = window.getSelection();
+      const text = selection ? selection.toString().trim() : "";
+      if (text && selection) {
+        let node = selection.anchorNode;
+        let insidePreview = false;
+        while (node) {
+          if (node instanceof HTMLElement && (node.classList.contains("doc-canvas") || node.classList.contains("doc-page-body"))) {
+            insidePreview = true;
+            break;
+          }
+          node = node.parentNode;
+        }
+        if (insidePreview) {
+          setSelectedText(text);
+        }
+      }
+    };
+    document.addEventListener("selectionchange", handleSelection);
+    return () => document.removeEventListener("selectionchange", handleSelection);
+  }, []);
 
   const university = UNIVERSITIES.find((u) => u.name === selection.university) ?? UNIVERSITIES[0];
   const school = university.schools.find((s) => s.name === selection.school) ?? university.schools[0];
@@ -131,16 +193,23 @@ function Workspace() {
   );
 
   const assets = useQuery({
-    queryKey: ["assets", id, doc.data?.final_document ? "ready" : "none"],
-    enabled: Boolean(doc.data?.final_document),
+    queryKey: ["assets", id, doc.data?.model ? "ready" : "none"],
+    enabled: Boolean(doc.data?.model),
     queryFn: () => fetchAssetUrls({ data: { documentId: id } }),
   });
 
   const original = useQuery({
     queryKey: ["original", id, doc.data?.model ? "ready" : "none"],
     enabled: Boolean(doc.data?.model),
-    queryFn: () => fetchOriginal({ data: { documentId: id } }),
+    queryFn: () => runOriginal({ data: { documentId: id } }),
   });
+
+  const mergedAssetUrls = useMemo(() => {
+    return {
+      ...original.data?.urls,
+      ...assets.data?.urls,
+    };
+  }, [original.data?.urls, assets.data?.urls]);
 
   async function analyze() {
     setBusy("analyze");
@@ -204,6 +273,41 @@ function Workspace() {
       .update({ decision, user_value: value ?? issue.user_value })
       .eq("id", issue.id);
     await queryClient.invalidateQueries({ queryKey: ["issues", id] });
+  }
+
+  async function sendChatMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+
+    const userMsg = chatMessage.trim();
+    setChatMessage("");
+    setChatHistory((prev) => [...prev, { role: "user", text: userMsg }]);
+    setBusy("chat");
+
+    try {
+      const payload: any = {
+        documentId: id,
+        message: userMsg,
+        selection,
+      };
+      if (selectedText) {
+        payload.selectedText = selectedText;
+      }
+      const res = await runChatEdit({ data: payload });
+
+      setChatHistory((prev) => [...prev, { role: "assistant", text: res.message }]);
+      setSelectedText("");
+      await queryClient.invalidateQueries({ queryKey: ["document", id] });
+      toast.success("Document updated successfully!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to edit document.");
+      setChatHistory((prev) => [
+        ...prev,
+        { role: "assistant", text: "Sorry, I encountered an error while trying to process that edit." },
+      ]);
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -335,8 +439,7 @@ function Workspace() {
                 options={UNIVERSITIES.map((u) => u.name)}
                 onChange={(value) => {
                   const next = UNIVERSITIES.find((u) => u.name === value)!;
-                  setSelection({
-                    ...selection,
+                  updateSelection({
                     university: value,
                     school: next.schools[0].name,
                     department: next.schools[0].departments[0],
@@ -350,8 +453,7 @@ function Workspace() {
                 options={university.schools.map((s) => s.name)}
                 onChange={(value) => {
                   const next = university.schools.find((s) => s.name === value)!;
-                  setSelection({
-                    ...selection,
+                  updateSelection({
                     school: value,
                     department: next.departments[0],
                     configId: next.configId,
@@ -362,19 +464,19 @@ function Workspace() {
                 label="Department"
                 value={selection.department}
                 options={[...school.departments]}
-                onChange={(value) => setSelection({ ...selection, department: value })}
+                onChange={(value) => updateSelection({ department: value })}
               />
               <Picker
                 label="Document type"
                 value={selection.documentType}
                 options={[...DOCUMENT_TYPES]}
-                onChange={(value) => setSelection({ ...selection, documentType: value })}
+                onChange={(value) => updateSelection({ documentType: value })}
               />
               <Picker
                 label="Academic level"
                 value={selection.level}
                 options={ACADEMIC_LEVEL_NAMES}
-                onChange={(value) => setSelection({ ...selection, level: value })}
+                onChange={(value) => updateSelection({ level: value })}
               />
             </div>
 
@@ -383,6 +485,143 @@ function Workspace() {
               <strong>{workLabel(selection.documentType, selection.level)}</strong> for this degree
               programme.
             </p>
+
+            {/* Metadata Fields Form */}
+            {doc.data?.model && (
+              <div className="border-t border-border pt-4 mt-4 space-y-4">
+                <h5 className="font-semibold text-sm">Cover Page & Certification Metadata</h5>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <Label htmlFor="meta-title" className="text-xs">Document Title</Label>
+                    <Textarea
+                      id="meta-title"
+                      className="mt-1 text-sm min-h-[40px]"
+                      value={(doc.data.model as any).meta?.title || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, title: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="Title of Dissertation / Thesis"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-author" className="text-xs">Author Name</Label>
+                    <input
+                      id="meta-author"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.author || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, author: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. JOHN DOE"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-reg" className="text-xs">Registration Number</Label>
+                    <input
+                      id="meta-reg"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.registrationNumber || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, registrationNumber: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. UB20A500"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-dept" className="text-xs">Department</Label>
+                    <input
+                      id="meta-dept"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.department || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, department: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. Computer Engineering"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-hod" className="text-xs">Head of Department (with title)</Label>
+                    <input
+                      id="meta-hod"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.headOfDepartment || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, headOfDepartment: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. Pr. Mbacham Wilfred"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-director" className="text-xs">Director / Dean (with title)</Label>
+                    <input
+                      id="meta-director"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.director || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, director: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. Pr. Fonteh Fru Mathias"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-degree" className="text-xs">Degree Awarded (Degree of Author)</Label>
+                    <input
+                      id="meta-degree"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.degreeOfAuthor || ""}
+                      onChange={async (e) => {
+                        const nextMeta = { ...(doc.data.model as any).meta, degreeOfAuthor: e.target.value };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. Master of Science"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="meta-supervisors" className="text-xs">Supervisors (comma separated)</Label>
+                    <input
+                      id="meta-supervisors"
+                      type="text"
+                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={(doc.data.model as any).meta?.supervisors?.join(", ") || ""}
+                      onChange={async (e) => {
+                        const supervisors = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                        const nextMeta = { ...(doc.data.model as any).meta, supervisors };
+                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
+                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
+                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
+                      }}
+                      placeholder="e.g. Dr. John, Pr. Smith"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               {config.notes.map((note) => (
@@ -423,13 +662,118 @@ function Workspace() {
             <CardContent className="space-y-6">
               {audit && audit.findings.length > 0 && (
                 <ul className="list-disc space-y-1 rounded-lg border border-border bg-secondary/40 p-4 pl-8 text-sm">
-                  {audit.findings.map((finding) => (
+                  {audit.findings.map((finding: string) => (
                     <li key={finding}>{finding}</li>
                   ))}
                 </ul>
               )}
-              <div className="doc-canvas">
-                <DocumentPreview final={final} config={config} assetUrls={assets.data?.urls ?? {}} />
+              
+              <div className="grid gap-6 lg:grid-cols-3">
+                {/* Document Preview (Left) */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="doc-canvas">
+                    <DocumentPreview final={final} config={config} assetUrls={mergedAssetUrls} />
+                  </div>
+                </div>
+
+                {/* AI Assistant Chat Panel (Right) */}
+                <div className="lg:col-span-1 space-y-4">
+                  <div className="sticky top-6 flex flex-col h-[600px] border border-border rounded-xl bg-card p-4 shadow-soft">
+                    <div className="border-b border-border pb-3 mb-3">
+                      <h4 className="font-semibold text-sm flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        AI Academic Editor
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Select text from the preview or type instructions to modify your document structure and content.
+                      </p>
+                    </div>
+
+                    {/* Chat Message History */}
+                    <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1 text-sm scrollbar-thin flex flex-col">
+                      {chatHistory.length === 0 ? (
+                        <div className="text-center text-muted-foreground my-auto py-8 px-2 space-y-2">
+                          <p className="font-medium text-xs">No instructions sent yet.</p>
+                          <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                            Highlight some text on the left to edit/remove it, or type requests like:
+                          </p>
+                          <ul className="text-left text-xs bg-secondary/40 p-2.5 rounded-lg border border-border/50 space-y-1 list-disc pl-5">
+                            <li>"Remove the section on security implications in chapter 3"</li>
+                            <li>"Add a paragraph discussing future research directions"</li>
+                            <li>"Rewrite the introduction of Chapter 1 to sound more professional"</li>
+                          </ul>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {chatHistory.map((msg, i) => (
+                            <div
+                              key={i}
+                              className={`p-3 rounded-lg ${
+                                msg.role === "user"
+                                  ? "bg-primary/5 text-primary ml-6"
+                                  : "bg-secondary text-secondary-foreground mr-6"
+                              }`}
+                            >
+                              <p className="text-xs font-semibold mb-1 uppercase tracking-wider opacity-60">
+                                {msg.role === "user" ? "You" : "AI Editor"}
+                              </p>
+                              <p className="leading-relaxed text-xs whitespace-pre-wrap">{msg.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {busy === "chat" && (
+                        <div className="bg-secondary text-secondary-foreground p-3 rounded-lg mr-6 animate-pulse mt-3">
+                          <p className="text-xs font-semibold mb-1 uppercase tracking-wider opacity-60">AI Editor</p>
+                          <p className="text-xs">Applying changes to document structure and regenerating final layout...</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Selected Text Helper */}
+                    {selectedText && (
+                      <div className="bg-secondary/60 border border-border p-2.5 rounded-lg text-xs mb-3 space-y-1">
+                        <div className="flex items-center justify-between font-medium">
+                          <span className="text-xs text-foreground/80">Selected text (context):</span>
+                          <button 
+                            type="button"
+                            onClick={() => setSelectedText("")}
+                            className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <p className="italic text-muted-foreground line-clamp-3 leading-relaxed">"{selectedText}"</p>
+                      </div>
+                    )}
+
+                    {/* Chat Input Form */}
+                    <form onSubmit={sendChatMessage} className="space-y-2 mt-auto">
+                      <Textarea
+                        placeholder={
+                          selectedText
+                            ? "Tell the AI what to do with the selected text (e.g. 'Remove this text' or 'Rewrite this')"
+                            : "Type formatting or content instructions here..."
+                        }
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        rows={2}
+                        disabled={busy === "chat"}
+                        className="resize-none text-xs"
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full text-xs"
+                        disabled={busy === "chat" || !chatMessage.trim()}
+                      >
+                        {busy === "chat" ? "Applying changes..." : "Apply Edit"}
+                      </Button>
+                    </form>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

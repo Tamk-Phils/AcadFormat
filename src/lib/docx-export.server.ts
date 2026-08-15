@@ -16,6 +16,7 @@ import {
   TableRow,
   TableCell,
   WidthType,
+  BorderStyle,
 } from "docx";
 import type { FinalDocument, RenderedPage } from "./document-model";
 import type { InstitutionConfig } from "./institutions";
@@ -65,8 +66,189 @@ function renderPage(
                 altText: { title: "Logo", description: "Institution logo", name: "logo" },
               }),
           );
-        if (runs.length > 0)
-          elements.push(new Paragraph({ alignment: AlignmentType.CENTER, children: runs }));
+        if (runs.length > 0) {
+          const children: any[] = [];
+          runs.forEach((run, index) => {
+            if (index > 0) {
+              children.push(new TextRun({ text: "        ", font }));
+            }
+            children.push(run);
+          });
+          elements.push(new Paragraph({ alignment: AlignmentType.CENTER, children }));
+        }
+        break;
+      }
+      case "bilingual": {
+        const leftParagraphs = (block.left || []).map((line) => new Paragraph({
+          alignment: AlignmentType.LEFT,
+          children: [new TextRun({ text: line, font, size: size - 3, bold: true })]
+        }));
+        const rightParagraphs = (block.right || []).map((line) => new Paragraph({
+          alignment: AlignmentType.RIGHT,
+          children: [new TextRun({ text: line, font, size: size - 3, bold: true })]
+        }));
+
+        const logoRuns = (block.imageIds ?? [])
+          .map((id) => images.get(id))
+          .filter((asset): asset is ImageAsset => Boolean(asset))
+          .map(
+            (asset) =>
+              new ImageRun({
+                type: asset.type,
+                data: asset.data,
+                transformation: { width: 60, height: 60 },
+                altText: { title: "Logo", description: "Institution logo", name: "logo" },
+              }),
+          );
+        const centerChildren: any[] = [];
+        logoRuns.forEach((run, index) => {
+          if (index > 0) centerChildren.push(new TextRun({ text: "  ", font }));
+          centerChildren.push(run);
+        });
+        const centerParagraphs = [new Paragraph({ alignment: AlignmentType.CENTER, children: centerChildren })];
+
+        elements.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: {
+            top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+            bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+            left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+            right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "auto" },
+            insideVertical: { style: BorderStyle.NONE, size: 0, color: "auto" },
+          },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  borders: { top: { style: BorderStyle.NONE, size: 0, color: "auto" }, bottom: { style: BorderStyle.NONE, size: 0, color: "auto" }, left: { style: BorderStyle.NONE, size: 0, color: "auto" }, right: { style: BorderStyle.NONE, size: 0, color: "auto" } },
+                  children: leftParagraphs,
+                }),
+                new TableCell({
+                  width: { size: 30, type: WidthType.PERCENTAGE },
+                  borders: { top: { style: BorderStyle.NONE, size: 0, color: "auto" }, bottom: { style: BorderStyle.NONE, size: 0, color: "auto" }, left: { style: BorderStyle.NONE, size: 0, color: "auto" }, right: { style: BorderStyle.NONE, size: 0, color: "auto" } },
+                  children: centerParagraphs,
+                }),
+                new TableCell({
+                  width: { size: 35, type: WidthType.PERCENTAGE },
+                  borders: { top: { style: BorderStyle.NONE, size: 0, color: "auto" }, bottom: { style: BorderStyle.NONE, size: 0, color: "auto" }, left: { style: BorderStyle.NONE, size: 0, color: "auto" }, right: { style: BorderStyle.NONE, size: 0, color: "auto" } },
+                  children: rightParagraphs,
+                }),
+              ],
+            }),
+          ],
+        }));
+        elements.push(new Paragraph({ children: [new TextRun({ text: "", font, size })] }));
+        break;
+      }
+      case "ubaHeader": {
+        const ubaLogoAsset = images.get("logo-uba");
+        const secondaryLogoId = block.imageIds?.find(id => id !== "logo-uba");
+        const secondaryLogoAsset = secondaryLogoId ? images.get(secondaryLogoId) : undefined;
+
+        const leftCellChildren: any[] = [];
+        if (ubaLogoAsset) {
+          leftCellChildren.push(
+            new Paragraph({
+              alignment: AlignmentType.LEFT,
+              children: [
+                new ImageRun({
+                  type: ubaLogoAsset.type,
+                  data: ubaLogoAsset.data,
+                  transformation: { width: 50, height: 50 },
+                  altText: { title: "Logo", description: "Institution logo", name: "logo" },
+                }),
+              ],
+            })
+          );
+        }
+
+        const rightCellChildren: any[] = [];
+        if (secondaryLogoAsset) {
+          rightCellChildren.push(
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new ImageRun({
+                  type: secondaryLogoAsset.type,
+                  data: secondaryLogoAsset.data,
+                  transformation: { width: 50, height: 50 },
+                  altText: { title: "Logo", description: "Institution logo", name: "logo" },
+                }),
+              ],
+            })
+          );
+        }
+
+        const centerCellChildren = (block.left || []).map((line, idx) => {
+          const isBold = idx === 0 || idx === 2 || idx === 5 || idx === 8;
+          const sz = idx === 5 ? size - 2 : (idx === 6 || idx === 7 || idx === 9) ? size - 4 : size - 3;
+          return new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 10, after: 10, line: 200 },
+            children: [
+              new TextRun({
+                text: line,
+                font,
+                bold: isBold,
+                size: sz,
+                italics: idx === 9,
+              }),
+            ],
+          });
+        });
+
+        elements.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+              bottom: { style: BorderStyle.SINGLE, size: 12, color: "000000" },
+              left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+              right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+              insideHorizontal: { style: BorderStyle.NONE, size: 0, color: "auto" },
+              insideVertical: { style: BorderStyle.NONE, size: 0, color: "auto" },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    width: { size: 15, type: WidthType.PERCENTAGE },
+                    borders: {
+                      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                    },
+                    children: leftCellChildren,
+                  }),
+                  new TableCell({
+                    width: { size: 70, type: WidthType.PERCENTAGE },
+                    borders: {
+                      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                    },
+                    children: centerCellChildren,
+                  }),
+                  new TableCell({
+                    width: { size: 15, type: WidthType.PERCENTAGE },
+                    borders: {
+                      top: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      bottom: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      left: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                      right: { style: BorderStyle.NONE, size: 0, color: "auto" },
+                    },
+                    children: rightCellChildren,
+                  }),
+                ],
+              }),
+            ],
+          })
+        );
+        elements.push(new Paragraph({ spacing: { before: 180, after: 180 }, children: [] }));
         break;
       }
       case "image": {
@@ -93,23 +275,62 @@ function renderPage(
         break;
       }
       case "title":
+        if (block.borderBox) {
+          elements.push(
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 12, color: "2B6CB0" },
+                bottom: { style: BorderStyle.SINGLE, size: 12, color: "2B6CB0" },
+                left: { style: BorderStyle.SINGLE, size: 12, color: "2B6CB0" },
+                right: { style: BorderStyle.SINGLE, size: 12, color: "2B6CB0" },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [
+                        new Paragraph({
+                          alignment: AlignmentType.CENTER,
+                          spacing: { before: 240, after: 240 },
+                          children: [new TextRun({ ...common, text: block.text, bold: true, size: 32 })],
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            })
+          );
+        } else {
+          elements.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing,
+              children: [new TextRun({ ...common, text: block.text, bold: true, size: 32 })],
+            }),
+          );
+        }
+        break;
+      case "center": {
+        const centerSize = block.size ? block.size * 2 : 28;
         elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing,
-            children: [new TextRun({ ...common, text: block.text, bold: true, size: 32 })],
+            children: [
+              new TextRun({
+                ...common,
+                text: block.text,
+                size: centerSize,
+                italics: block.italic || false,
+                bold: block.bold || false,
+              }),
+            ],
           }),
         );
         break;
-      case "center":
-        elements.push(
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing,
-            children: [new TextRun({ ...common, text: block.text, size: 28 })],
-          }),
-        );
-        break;
+      }
       case "heading1":
         elements.push(
           new Paragraph({
@@ -139,10 +360,10 @@ function renderPage(
       case "listline": {
         const [left, right] = block.text.split("\t");
         const indent = ((block.level ?? 1) - 1) * 360;
-        const bold = block.bold === true;
+        const bold = block.bold === true || (block.level === 1);
         elements.push(
           new Paragraph({
-            spacing: { line: 240, after: 60 },
+            spacing: { line: 360, before: 120, after: 120 },
             ...(indent > 0 ? { indent: { left: indent } } : {}),
             ...(right
               ? {
@@ -160,7 +381,15 @@ function renderPage(
         break;
       }
       case "table": {
-        const rows = (block.tableRows ?? []).map((row, rIdx) => {
+        const rawRows =
+          block.tableRows && block.tableRows.length > 0
+            ? block.tableRows
+            : (block.text || "")
+                .split("\n")
+                .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
+                .filter((r) => r.length > 0);
+
+        const rows = rawRows.map((row, rIdx) => {
           return new TableRow({
             children: row.map((cell) => {
               return new TableCell({
@@ -185,6 +414,14 @@ function renderPage(
           elements.push(
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 8, color: "000000" },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "CCCCCC" },
+                left: { style: BorderStyle.NONE },
+                right: { style: BorderStyle.NONE },
+                insideVertical: { style: BorderStyle.NONE },
+              },
               rows,
             }),
           );
@@ -219,9 +456,6 @@ export async function buildDocx(
   };
   const page = { size: { width: 12240, height: 15840 }, margin };
 
-  const prelim = final.pages.filter((p) => p.kind === "cover" || p.kind === "preliminary");
-  const body = final.pages.filter((p) => p.kind === "body" || p.kind === "back");
-
   const footer = (format: (typeof NumberFormat)[keyof typeof NumberFormat]) =>
     new Footer({
       children: [
@@ -234,29 +468,93 @@ export async function buildDocx(
       ],
     });
 
+  const groups: {
+    kind: "cover" | "preliminary" | "body" | "back";
+    isNumbered: boolean;
+    hasPageBorder: boolean;
+    pages: RenderedPage[];
+  }[] = [];
+
+  final.pages.forEach((p) => {
+    const isNumbered = Boolean(p.numberLabel);
+    const hasPageBorder = Boolean(p.hasPageBorder);
+    
+    const lastGroup = groups[groups.length - 1];
+    if (
+      lastGroup &&
+      lastGroup.kind === p.kind &&
+      lastGroup.isNumbered === isNumbered &&
+      lastGroup.hasPageBorder === hasPageBorder
+    ) {
+      lastGroup.pages.push(p);
+    } else {
+      groups.push({
+        kind: p.kind,
+        isNumbered,
+        hasPageBorder,
+        pages: [p],
+      });
+    }
+  });
+
+  const firstNumberedIndex = final.pages.findIndex((p) => Boolean(p.numberLabel));
+  let hasSetFirstNumberedStart = false;
+
+  const sections: any[] = groups.map((group, groupIdx) => {
+    const isNumbered = group.isNumbered;
+    const formatType =
+      group.kind === "body" || group.kind === "back"
+        ? NumberFormat.DECIMAL
+        : NumberFormat.LOWER_ROMAN;
+
+    const pageProps: any = {
+      ...page,
+    };
+
+    if (group.hasPageBorder) {
+      pageProps.borders = {
+        pageBorderTop: { style: BorderStyle.SINGLE, size: 12, color: "000000" },
+        pageBorderBottom: { style: BorderStyle.SINGLE, size: 12, color: "000000" },
+        pageBorderLeft: { style: BorderStyle.SINGLE, size: 12, color: "000000" },
+        pageBorderRight: { style: BorderStyle.SINGLE, size: 12, color: "000000" },
+      };
+    }
+
+    if (isNumbered) {
+      if (formatType === NumberFormat.DECIMAL && group.kind === "body" && groupIdx === groups.findIndex(g => g.kind === "body")) {
+        // Reset body to start at 1
+        pageProps.pageNumbers = { start: 1, formatType };
+      } else if (!hasSetFirstNumberedStart && firstNumberedIndex >= 0) {
+        // First numbered prelim section starts at its physical page index + 1
+        pageProps.pageNumbers = { start: firstNumberedIndex + 1, formatType };
+        hasSetFirstNumberedStart = true;
+      } else {
+        // Continue from previous section
+        pageProps.pageNumbers = { formatType };
+      }
+    }
+
+    const sectionOptions: any = {
+      properties: {
+        page: pageProps,
+        type: groupIdx > 0 ? SectionType.NEXT_PAGE : undefined,
+      },
+      children: group.pages.flatMap((p, i) => {
+        const isLastInGroup = i === group.pages.length - 1;
+        return renderPage(p, config, !isLastInGroup, images);
+      }),
+    };
+
+    if (isNumbered) {
+      sectionOptions.footers = { default: footer(formatType) };
+    }
+
+    return sectionOptions;
+  });
+
   const document = new Document({
     styles: { default: { document: { run: { font: config.font, size: config.fontSizePt * 2 } } } },
-    sections: [
-      {
-        properties: {
-          page: { ...page, pageNumbers: { start: 1, formatType: NumberFormat.LOWER_ROMAN } },
-        },
-        footers: { default: footer(NumberFormat.LOWER_ROMAN) },
-        children: prelim.flatMap((p, i) =>
-          renderPage(p, config, i < prelim.length - 1 && Boolean(prelim[i + 1]?.startsSection), images),
-        ),
-      },
-      {
-        properties: {
-          type: SectionType.NEXT_PAGE,
-          page: { ...page, pageNumbers: { start: 1, formatType: NumberFormat.DECIMAL } },
-        },
-        footers: { default: footer(NumberFormat.DECIMAL) },
-        children: body.flatMap((p, i) =>
-          renderPage(p, config, i < body.length - 1 && Boolean(body[i + 1]?.startsSection), images),
-        ),
-      },
-    ],
+    sections,
   });
 
   const buffer = await Packer.toBuffer(document);

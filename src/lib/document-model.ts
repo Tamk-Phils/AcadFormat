@@ -63,6 +63,9 @@ export interface DocumentMeta {
   supervisors?: string[];
   monthYear?: string;
   keywords?: string[];
+  headOfDepartment?: string;
+  director?: string;
+  degreeOfAuthor?: string;
 }
 
 export interface DocumentModel {
@@ -90,6 +93,7 @@ export interface OriginalBlock {
   text: string;
   level?: number;
   imageId?: string;
+  tableRows?: string[][];
 }
 
 export interface Understanding {
@@ -145,7 +149,9 @@ export type BlockType =
   | "image"
   | "logos"
   | "spacer"
-  | "table";
+  | "table"
+  | "bilingual"
+  | "ubaHeader";
 
 export interface Block {
   type: BlockType;
@@ -158,6 +164,12 @@ export interface Block {
   bold?: boolean;
   /** Parsed table cell grid (rows of column cell strings). */
   tableRows?: string[][];
+  /** Left and right lines for bilingual headers */
+  left?: string[];
+  right?: string[];
+  borderBox?: boolean;
+  italic?: boolean;
+  size?: number;
 }
 
 export interface RenderedPage {
@@ -167,6 +179,7 @@ export interface RenderedPage {
   sectionTitle: string;
   startsSection?: boolean;
   blocks: Block[];
+  hasPageBorder?: boolean;
 }
 
 export interface ListEntry {
