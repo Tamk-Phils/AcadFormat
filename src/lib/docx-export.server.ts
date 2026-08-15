@@ -20,6 +20,7 @@ import {
 } from "docx";
 import type { FinalDocument, RenderedPage } from "./document-model";
 import type { InstitutionConfig } from "./institutions";
+import { parseTableRows } from "./utils";
 
 const DXA_PER_INCH = 1440;
 
@@ -335,7 +336,7 @@ function renderPage(
         elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            spacing: { ...spacing, before: 240 },
+            spacing: { before: 240, after: 80, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true, size: size + 4 })],
           }),
         );
@@ -343,7 +344,7 @@ function renderPage(
       case "heading2":
         elements.push(
           new Paragraph({
-            spacing: { ...spacing, before: 180 },
+            spacing: { before: 180, after: 60, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true })],
           }),
         );
@@ -381,13 +382,7 @@ function renderPage(
         break;
       }
       case "table": {
-        const rawRows =
-          block.tableRows && block.tableRows.length > 0
-            ? block.tableRows
-            : (block.text || "")
-                .split("\n")
-                .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
-                .filter((r) => r.length > 0);
+        const rawRows = parseTableRows(block);
 
         const rows = rawRows.map((row, rIdx) => {
           return new TableRow({

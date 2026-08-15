@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage } from "pdf-lib";
 import type { FinalDocument } from "./document-model";
 import type { InstitutionConfig } from "./institutions";
+import { parseTableRows } from "./utils";
 
 export interface PdfImageAsset {
   data: Uint8Array;
@@ -365,13 +366,7 @@ export async function buildPdf(
         }
         y -= 6;
       } else if (block.type === "table") {
-        const rows =
-          block.tableRows && block.tableRows.length > 0
-            ? block.tableRows
-            : (block.text || "")
-                .split("\n")
-                .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
-                .filter((r) => r.length > 0);
+        const rows = parseTableRows(block);
 
         if (rows.length > 0) {
           const colsCount = Math.max(...rows.map((r) => r.length));

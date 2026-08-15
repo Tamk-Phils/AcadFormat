@@ -228,9 +228,13 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   const rawLines = content.split("\n");
   const lines: string[] = [];
   rawLines.forEach((rawLine) => {
-    const parts = rawLine.split(BULLET_SPLIT_REGEX);
-    parts.forEach((part) => {
-      if (part.trim()) lines.push(part.trim());
+    // Pre-split inline [IMAGE:...] markers so they become standalone line items
+    const imageChunks = rawLine.split(/(?=\[IMAGE(?::\d+)?\])|(?<=\[IMAGE(?::\d+)?\])/i);
+    imageChunks.forEach((chunk) => {
+      const parts = chunk.split(BULLET_SPLIT_REGEX);
+      parts.forEach((part) => {
+        if (part.trim()) lines.push(part.trim());
+      });
     });
   });
 
@@ -756,7 +760,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
           "DEPARTMENT OF",
           cleanDept(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()
         ],
-        imageIds: ["logo-uba"]
+        imageIds: isColtech ? ["logo-uba", "logo-coltech"] : ["logo-uba"]
       },
       { type: "spacer" as const, text: "" },
       {

@@ -1,5 +1,6 @@
 import type { FinalDocument } from "@/lib/document-model";
 import type { InstitutionConfig } from "@/lib/institutions";
+import { parseTableRows } from "@/lib/utils";
 
 export function DocumentPreview({
   final,
@@ -83,9 +84,10 @@ export function DocumentPreview({
                     </div>
                     {block.imageIds && block.imageIds.length > 0 && (
                       <div className="flex justify-center items-center gap-4 px-4">
-                        {block.imageIds.filter(id => assetUrls[id]).map(id => (
-                          <img key={id} src={assetUrls[id]} alt="Logo" className="h-20 w-auto" />
-                        ))}
+                        {block.imageIds.map((id) => {
+                          const url = assetUrls[id] || (id === "logo-coltech" || id === "coltech.jpg" ? "/logo-coltech.jpg" : id === "logo-uba" || id === "uba.jpg" ? "/logo-uba.png" : undefined);
+                          return url ? <img key={id} src={url} alt="Logo" className="h-20 w-auto" /> : null;
+                        })}
                       </div>
                     )}
                     <div className="text-right flex-1">
@@ -169,13 +171,7 @@ export function DocumentPreview({
                 );
               }
               if (block.type === "table") {
-                const rows =
-                  block.tableRows && block.tableRows.length > 0
-                    ? block.tableRows
-                    : (block.text || "")
-                        .split("\n")
-                        .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
-                        .filter((r) => r.length > 0);
+                const rows = parseTableRows(block);
 
                 if (rows.length === 0) {
                   return (
