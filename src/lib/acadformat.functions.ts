@@ -58,14 +58,19 @@ export const analyzeDocument = createServerFn({ method: "POST" })
                 : "png";
           const path = `${userId}/assets/${row.id}/img-${image.index}.${ext}`;
           const binary = Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0));
+          let storedPath = path;
           const upload = await supabaseAdmin.storage
             .from("documents")
             .upload(path, binary, { contentType: image.contentType, upsert: true });
-          if (upload.error) return null;
+          if (upload.error) {
+            console.warn(`[storage] Failed to upload image img-${image.index}:`, upload.error.message);
+            storedPath = "";
+          }
           return {
             id: `img-${image.index}`,
-            path,
+            path: storedPath,
             contentType: image.contentType,
+            base64: image.base64,
             role: isLogo ? "logo" : "figure",
           } as DocumentImage;
         })
@@ -179,7 +184,7 @@ export const exportDocx = createServerFn({ method: "POST" })
 
     const images = new Map<string, ImageAsset>();
     for (const image of final.images ?? []) {
-      let bytes: Uint8Array;
+      let bytes: Uint8Array | null = null;
       let contentType = image.contentType;
 
       if (image.path.startsWith("public/") || image.path.startsWith("logo-") || image.id.startsWith("logo-")) {
@@ -187,24 +192,30 @@ export const exportDocx = createServerFn({ method: "POST" })
         if (logo) {
           bytes = logo.data;
           contentType = logo.contentType;
-        } else {
-          continue;
         }
-      } else {
+      } else if (image.path) {
         const file = await supabaseAdmin.storage.from("documents").download(image.path);
-        if (file.error || !file.data) continue;
-        bytes = new Uint8Array(await file.data.arrayBuffer());
+        if (!file.error && file.data) {
+          bytes = new Uint8Array(await file.data.arrayBuffer());
+        }
       }
-      images.set(image.id, {
-        data: bytes,
-        type: /jpe?g/i.test(contentType)
-          ? "jpg"
-          : /gif/i.test(contentType)
-            ? "gif"
-            : /bmp/i.test(contentType)
-              ? "bmp"
-              : "png",
-      });
+
+      if (!bytes && image.base64) {
+        bytes = Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0));
+      }
+
+      if (bytes) {
+        images.set(image.id, {
+          data: bytes,
+          type: /jpe?g/i.test(contentType)
+            ? "jpg"
+            : /gif/i.test(contentType)
+              ? "gif"
+              : /bmp/i.test(contentType)
+                ? "bmp"
+                : "png",
+        });
+      }
     }
     const base64 = await buildDocx(
       final as never,
@@ -232,7 +243,7 @@ export const exportPdf = createServerFn({ method: "POST" })
 
     const images = new Map<string, { data: Uint8Array; contentType: string }>();
     for (const image of final.images ?? []) {
-      let bytes: Uint8Array;
+      let bytes: Uint8Array | null = null;
       let contentType = image.contentType;
 
       if (image.path.startsWith("public/") || image.path.startsWith("logo-") || image.id.startsWith("logo-")) {
@@ -240,18 +251,24 @@ export const exportPdf = createServerFn({ method: "POST" })
         if (logo) {
           bytes = logo.data;
           contentType = logo.contentType;
-        } else {
-          continue;
         }
-      } else {
+      } else if (image.path) {
         const file = await supabaseAdmin.storage.from("documents").download(image.path);
-        if (file.error || !file.data) continue;
-        bytes = new Uint8Array(await file.data.arrayBuffer());
+        if (!file.error && file.data) {
+          bytes = new Uint8Array(await file.data.arrayBuffer());
+        }
       }
-      images.set(image.id, {
-        data: bytes,
-        contentType,
-      });
+
+      if (!bytes && image.base64) {
+        bytes = Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0));
+      }
+
+      if (bytes) {
+        images.set(image.id, {
+          data: bytes,
+          contentType,
+        });
+      }
     }
     const base64 = await buildPdf(
       final as never,
@@ -274,10 +291,15 @@ export const getOriginalDocument = createServerFn({ method: "POST" })
     const model = row?.model as unknown as DocumentModel | null;
     const urls: Record<string, string> = {};
     for (const image of model?.images ?? []) {
-      const signed = await context.supabase.storage
-        .from("documents")
-        .createSignedUrl(image.path, 60 * 60);
-      if (signed.data?.signedUrl) urls[image.id] = signed.data.signedUrl;
+      if (image.path) {
+        const signed = await context.supabase.storage
+          .from("documents")
+          .createSignedUrl(image.path, 60 * 60);
+        if (signed.data?.signedUrl) urls[image.id] = signed.data.signedUrl;
+      }
+      if (!urls[image.id] && image.base64) {
+        urls[image.id] = `data:${image.contentType || "image/png"};base64,${image.base64}`;
+      }
     }
     return { blocks: model?.original ?? [], urls };
   });
@@ -296,11 +318,14 @@ export const getAssetUrls = createServerFn({ method: "POST" })
     for (const image of final?.images ?? []) {
       if (image.path.startsWith("public/") || image.path.startsWith("logo-")) {
         urls[image.id] = image.path.startsWith("public/") ? image.path.replace("public/", "/") : `/${image.path}`;
-      } else {
+      } else if (image.path) {
         const signed = await context.supabase.storage
           .from("documents")
           .createSignedUrl(image.path, 60 * 60);
         if (signed.data?.signedUrl) urls[image.id] = signed.data.signedUrl;
+      }
+      if (!urls[image.id] && image.base64) {
+        urls[image.id] = `data:${image.contentType || "image/png"};base64,${image.base64}`;
       }
     }
     return { urls };

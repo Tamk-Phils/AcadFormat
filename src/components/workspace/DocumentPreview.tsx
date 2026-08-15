@@ -33,15 +33,20 @@ export function DocumentPreview({
               if (block.type === "logos")
                 return (
                   <div key={index} className="mb-4 flex items-center justify-center gap-8">
-                    {(block.imageIds ?? [])
-                      .filter((id) => assetUrls[id])
-                      .map((id) => (
-                        <img key={id} src={assetUrls[id]} alt="Institution logo" className="h-20 w-auto" />
-                      ))}
+                    {(block.imageIds ?? []).map((id) => {
+                      const url = assetUrls[id] || (id === "logo-coltech" || id === "coltech.jpg" ? "/logo-coltech.jpg" : id === "logo-uba" || id === "uba.jpg" ? "/logo-uba.png" : undefined);
+                      return url ? <img key={id} src={url} alt="Institution logo" className="h-20 w-auto" /> : null;
+                    })}
                   </div>
                 );
               if (block.type === "image") {
-                const url = block.imageId ? assetUrls[block.imageId] : undefined;
+                let url = block.imageId ? assetUrls[block.imageId] : undefined;
+                if (!url && block.imageId && final.images) {
+                  const imgObj = final.images.find((i) => i.id === block.imageId);
+                  if (imgObj?.base64) {
+                    url = `data:${imgObj.contentType || "image/png"};base64,${imgObj.base64}`;
+                  }
+                }
                 if (!url) {
                   return (
                     <div key={index} className="my-4 p-5 border-2 border-dashed border-neutral-400 bg-neutral-50 rounded-lg text-center font-serif text-neutral-800 max-w-lg mx-auto">
@@ -107,8 +112,8 @@ export function DocumentPreview({
                 );
               if (block.type === "ubaHeader") {
                 const ubaLogo = assetUrls["logo-uba"] || assetUrls["uba.jpg"] || "/logo-uba.png";
-                const secondaryLogoId = block.imageIds?.find(id => id !== "logo-uba");
-                const secondaryLogo = secondaryLogoId ? (assetUrls[secondaryLogoId] || (secondaryLogoId === "logo-coltech" ? "/logo-coltech.jpg" : undefined)) : (assetUrls["logo-coltech"] || "/logo-coltech.jpg");
+                const secondaryLogoId = block.imageIds && block.imageIds.length > 1 ? block.imageIds.find(id => id !== "logo-uba") : undefined;
+                const secondaryLogo = secondaryLogoId ? (assetUrls[secondaryLogoId] || (secondaryLogoId === "logo-coltech" ? "/logo-coltech.jpg" : undefined)) : undefined;
 
                 return (
                   <div key={index} className="w-full border-b-2 border-black pb-3 mb-6 font-serif text-black">

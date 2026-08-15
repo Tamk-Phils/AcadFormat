@@ -258,7 +258,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
 
     tableLines.forEach((line) => {
       const trimmedLine = line.trim();
-      if (/^table\s+\d+/i.test(trimmedLine) || /^tab\.\s*\d+/i.test(trimmedLine)) {
+      if (/^(table|tab\.)\s*\d+/i.test(trimmedLine)) {
         tableCaptionText = trimmedLine;
         return;
       }
@@ -272,10 +272,10 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         if (trimmedLine.endsWith("|")) cells.pop();
       } else if (trimmedLine.includes("\t")) {
         cells = trimmedLine.split("\t");
-      } else if (/\s{3,}/.test(trimmedLine)) {
+      } else if (/\S\s{3,}\S/.test(trimmedLine)) {
         cells = trimmedLine.split(/\s{3,}/);
       } else {
-        cells = [trimmedLine];
+        return;
       }
 
       const trimmedCells = cells.map((c) => c.trim());
@@ -315,16 +315,16 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       continue;
     }
 
-    const imageMatch = line.match(/^\[IMAGE:(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i);
+    const imageMatch = line.match(/^\[IMAGE\s*:\s*(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i) || line.match(/^\[IMAGE\s*:\s*(img-\d+)\]$/i);
     if (imageMatch) {
       flushPara();
       hasEmptyLine = false;
       if (inTable) flushTable();
       const imageIndex = imageMatch[1];
-      const imageId = imageIndex !== undefined ? `img-${imageIndex}` : undefined;
+      const imageId = imageIndex !== undefined ? (imageIndex.startsWith("img-") ? imageIndex : `img-${imageIndex}`) : undefined;
       const foundImage = finalImages.find((img) =>
         img.id === imageId || img.id === `img-${imageIndex}` || img.id === imageIndex
-      ) || (imageIndex !== undefined ? finalImages[Number(imageIndex)] : undefined);
+      ) || (imageIndex !== undefined && !isNaN(Number(imageIndex)) ? finalImages[Number(imageIndex)] : undefined);
 
       if (foundImage) {
         blocks.push({ type: "image", text: "", imageId: foundImage.id });
@@ -337,11 +337,26 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       continue;
     }
 
+    const isCaptionLine = /^(table|tab\.)\s*\d+/i.test(line);
     const hasPipes = (line.match(/\|/g) || []).length >= 2;
-    const isTableRow = inTable ||
+    const hasTabs = line.includes("\t");
+    const hasMultiSpace = /\S\s{3,}\S/.test(line);
+    const isDivider = /^[:\|\-\s]{3,}$/.test(line) && line.includes("-");
+
+    const checkNextIsTable = () => {
+      if (i + 1 >= lines.length) return false;
+      const next = lines[i + 1]!.trim();
+      return (next.match(/\|/g) || []).length >= 2 || next.includes("\t") || /\S\s{3,}\S/.test(next);
+    };
+
+    const isTableRow =
+      hasPipes ||
       line.includes("  |  ") ||
       (line.startsWith("|") && line.endsWith("|")) ||
-      (hasPipes && i + 1 < lines.length && /^[:\|\-\s]+$/.test(lines[i+1]!.trim()));
+      hasTabs ||
+      hasMultiSpace ||
+      isDivider ||
+      (isCaptionLine && checkNextIsTable());
 
     if (isTableRow) {
       flushPara();
@@ -873,7 +888,9 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
                 }
                 return lines;
               })(),
-              imageIds: isColtech ? ["logo-uba", "logo-coltech"] : ["logo-uba"],
+              imageIds: config.coverLogoCount === 2 || (isColtech && (selection.documentType === "Internship Report" || selection.documentType === "Assignment"))
+                ? ["logo-uba", "logo-coltech"]
+                : ["logo-uba"],
             },
           ]
         : [

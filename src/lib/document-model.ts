@@ -85,6 +85,7 @@ export interface DocumentImage {
   path: string;
   contentType: string;
   role: "logo" | "figure";
+  base64?: string;
 }
 
 /** Faithful, unmodified rendering of the uploaded file, used for the "original" preview. */
