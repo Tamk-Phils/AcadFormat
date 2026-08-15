@@ -464,18 +464,18 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   const isColtech = selection.school.toLowerCase().includes("college of technology") || selection.school.toLowerCase().includes("coltech");
   const isFinalYearWork = ["Dissertation", "Thesis", "End of Course Project"].includes(selection.documentType);
 
-  if (selection.university.toLowerCase().includes("bamenda")) {
-    if (isColtech && !isFinalYearWork) {
+  if (selection.university.toLowerCase().includes("bamenda") || isColtech) {
+    if (isColtech) {
       logoImages = [
         {
           id: "logo-uba",
-          path: "public/uba.jpg",
-          contentType: "image/jpeg",
+          path: "public/logo-uba.png",
+          contentType: "image/png",
           role: "logo"
         },
         {
           id: "logo-coltech",
-          path: "public/coltech.jpg",
+          path: "public/logo-coltech.jpg",
           contentType: "image/jpeg",
           role: "logo"
         }
@@ -484,8 +484,8 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       logoImages = [
         {
           id: "logo-uba",
-          path: "public/uba.jpg",
-          contentType: "image/jpeg",
+          path: "public/logo-uba.png",
+          contentType: "image/png",
           role: "logo"
         }
       ];

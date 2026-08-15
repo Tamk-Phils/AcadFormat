@@ -1,8 +1,8 @@
 import type { AnalysisResult, DocumentModel } from "./document-model";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-3.5-flash";
-const MAX_CHARS = 400_000;
+const MODEL = "google/gemini-2.5-flash";
+const MAX_CHARS = 160_000;
 
 const SYSTEM_PROMPT = `You are the academic document understanding and validation engine behind AcadFormat.
 You analyse a COMPLETE academic work as one document, never page by page.
@@ -91,7 +91,7 @@ function resolveAIProvider(provider: AIProvider): ProviderConfig {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${geminiKey}`,
         },
-        model: process.env["GEMINI_MODEL"] || "gemini-3.5-flash",
+        model: process.env["GEMINI_MODEL"] || "gemini-2.5-flash",
       };
     case "openrouter":
       return {

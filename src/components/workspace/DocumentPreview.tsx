@@ -94,9 +94,9 @@ export function DocumentPreview({
                   </div>
                 );
               if (block.type === "ubaHeader") {
-                const ubaLogo = assetUrls["logo-uba"];
+                const ubaLogo = assetUrls["logo-uba"] || assetUrls["uba.jpg"] || "/logo-uba.png";
                 const secondaryLogoId = block.imageIds?.find(id => id !== "logo-uba");
-                const secondaryLogo = secondaryLogoId ? assetUrls[secondaryLogoId] : undefined;
+                const secondaryLogo = secondaryLogoId ? (assetUrls[secondaryLogoId] || (secondaryLogoId === "logo-coltech" ? "/logo-coltech.jpg" : undefined)) : (assetUrls["logo-coltech"] || "/logo-coltech.jpg");
 
                 return (
                   <div key={index} className="w-full border-b-2 border-black pb-3 mb-6 font-serif text-black">

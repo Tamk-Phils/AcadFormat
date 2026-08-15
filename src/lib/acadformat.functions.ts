@@ -41,33 +41,37 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       if (extracted.text.trim().length < 200)
         throw new Error("No readable text was found in this file. If it is a scanned PDF, upload the DOCX instead.");
 
-      // Persist embedded images (logos, figures) so they survive the rebuild.
-      const uploadedImages: DocumentImage[] = [];
+      // Persist embedded images (logos, figures) concurrently so they survive rebuild without slowing down analysis.
       const firstChapterAt = extracted.text.search(/chapter\s*(1|one|i\b)/i);
-      for (const image of extracted.images) {
-        const marker = extracted.text.indexOf(`[IMAGE:${image.index}]`);
-        const isLogo =
-          marker >= 0 && (firstChapterAt < 0 ? marker < 2500 : marker < firstChapterAt) && marker < 4000;
-        const ext = image.contentType.includes("jpeg")
-          ? "jpg"
-          : image.contentType.includes("gif")
-            ? "gif"
-            : image.contentType.includes("bmp")
-              ? "bmp"
-              : "png";
-        const path = `${userId}/assets/${row.id}/img-${image.index}.${ext}`;
-        const binary = Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0));
-        const upload = await supabaseAdmin.storage
-          .from("documents")
-          .upload(path, binary, { contentType: image.contentType, upsert: true });
-        if (upload.error) continue;
-        uploadedImages.push({
-          id: `img-${image.index}`,
-          path,
-          contentType: image.contentType,
-          role: isLogo ? "logo" : "figure",
-        });
-      }
+      const uploadResults = await Promise.all(
+        extracted.images.map(async (image) => {
+          const marker = extracted.text.indexOf(`[IMAGE:${image.index}]`);
+          const isLogo =
+            marker >= 0 && (firstChapterAt < 0 ? marker < 2500 : marker < firstChapterAt) && marker < 4000;
+          const ext = image.contentType.includes("jpeg")
+            ? "jpg"
+            : image.contentType.includes("gif")
+              ? "gif"
+              : image.contentType.includes("bmp")
+                ? "bmp"
+                : "png";
+          const path = `${userId}/assets/${row.id}/img-${image.index}.${ext}`;
+          const binary = Uint8Array.from(atob(image.base64), (c) => c.charCodeAt(0));
+          const upload = await supabaseAdmin.storage
+            .from("documents")
+            .upload(path, binary, { contentType: image.contentType, upsert: true });
+          if (upload.error) return null;
+          return {
+            id: `img-${image.index}`,
+            path,
+            contentType: image.contentType,
+            role: isLogo ? "logo" : "figure",
+          } as DocumentImage;
+        })
+      );
+      const uploadedImages: DocumentImage[] = uploadResults.filter(
+        (img): img is DocumentImage => img !== null
+      );
 
       const analysis = await analyzeWithAI({
         text: extracted.text,

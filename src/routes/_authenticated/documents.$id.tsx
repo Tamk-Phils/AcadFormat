@@ -206,6 +206,10 @@ function Workspace() {
 
   const mergedAssetUrls = useMemo(() => {
     return {
+      "logo-uba": "/logo-uba.png",
+      "logo-coltech": "/logo-coltech.jpg",
+      "uba.jpg": "/uba.jpg",
+      "coltech.jpg": "/coltech.jpg",
       ...original.data?.urls,
       ...assets.data?.urls,
     };
