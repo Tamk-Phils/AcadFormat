@@ -2,7 +2,7 @@ import type { AnalysisResult, DocumentModel } from "./document-model";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
-const MAX_CHARS = 50_000;
+const MAX_CHARS = 24_000;
 
 const SYSTEM_PROMPT = `You are the academic document understanding and validation engine behind AcadFormat.
 You analyse a COMPLETE academic work as one document, never page by page.
@@ -81,7 +81,7 @@ function resolveAIProvider(provider: AIProvider): ProviderConfig {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${groqKey}`,
         },
-        model: process.env["GROQ_MODEL"] || "llama-3.1-8b-instant",
+        model: process.env["GROQ_MODEL"] || "llama-3.3-70b-versatile",
       };
     case "gemini":
       return {
@@ -91,7 +91,7 @@ function resolveAIProvider(provider: AIProvider): ProviderConfig {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${geminiKey}`,
         },
-        model: process.env["GEMINI_MODEL"] || "gemini-2.5-flash",
+        model: process.env["GEMINI_MODEL"] || "gemini-3.5-flash",
       };
     case "openrouter":
       return {
@@ -177,8 +177,8 @@ export async function analyzeWithAI(input: {
     providersToTry.push(envProvider);
   }
 
-  // 3. Fallback list in order of speed and reliability (groq -> gemini -> deepseek -> lovable -> custom -> openrouter)
-  const defaultOrder: AIProvider[] = ["groq", "gemini", "deepseek", "lovable", "custom", "openrouter"];
+  // 3. Fallback list in order of speed and reliability (gemini -> groq -> deepseek -> lovable -> custom -> openrouter)
+  const defaultOrder: AIProvider[] = ["gemini", "groq", "deepseek", "lovable", "custom", "openrouter"];
   for (const p of defaultOrder) {
     if (hasKey(p) && !providersToTry.includes(p)) {
       providersToTry.push(p);
