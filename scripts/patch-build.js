@@ -16,12 +16,8 @@ if (fs.existsSync(ssrFile)) {
   // Fix Nitro Vite virtual plugin issue where ssr_exports is referenced without import
   if (content.includes('ssr_exports as a')) {
     content = content.replace(
-      'import { a as server_default',
-      'import { o as handler, a as server_default'
-    );
-    content = content.replace(
       'ssr_exports as a',
-      'handler as a'
+      'server_default as a'
     );
     fs.writeFileSync(ssrFile, content, 'utf8');
     console.log('[patch-build] Successfully patched .vercel/output _ssr/ssr.mjs export reference.');
