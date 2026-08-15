@@ -226,7 +226,7 @@ function DocsPage() {
                   <div>
                     <h2 className="font-display text-2xl">Configuring AI Providers</h2>
                     <p className="text-sm text-muted-foreground">
-                      AcadFormat natively supports Google Gemini, Groq, OpenRouter, and Lovable AI models.
+                      AcadFormat natively supports Google Gemini, Groq, OpenRouter, DeepSeek, and Custom AI endpoints.
                     </p>
                   </div>
                 </div>

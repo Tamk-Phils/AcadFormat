@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "postinstall": "node scripts/patch-tanstack.js"
+    "postinstall": "node scripts/patch-tanstack.js",
+    "postbuild": "node scripts/patch-build.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
