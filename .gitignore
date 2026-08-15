@@ -34,3 +34,4 @@ dist-ssr
 # Gemini and Vercel local folders
 .gemini/
 .vercel/
+.env
