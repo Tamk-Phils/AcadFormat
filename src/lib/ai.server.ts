@@ -146,12 +146,12 @@ function hasKey(p: AIProvider): boolean {
   const deepseekKey = process.env["DEEPSEEK_API_KEY"];
   const customUrl = process.env["CUSTOM_API_URL"];
 
-  if (p === "groq") return !!groqKey;
-  if (p === "gemini") return !!geminiKey;
-  if (p === "openrouter") return !!openrouterKey;
+  if (p === "groq") return !!groqKey && !groqKey.includes("your-");
+  if (p === "gemini") return !!geminiKey && !geminiKey.includes("your-");
+  if (p === "openrouter") return !!openrouterKey && !openrouterKey.includes("your-");
   if (p === "lovable") return !!lovableKey;
-  if (p === "deepseek") return !!deepseekKey;
-  if (p === "custom") return !!customUrl;
+  if (p === "deepseek") return !!deepseekKey && !deepseekKey.includes("your-");
+  if (p === "custom") return !!customUrl && !customUrl.includes("your-huggingface-space-or-cloudflare-worker");
   return false;
 }
 
@@ -163,13 +163,6 @@ export async function analyzeWithAI(input: {
   institutionHint: string;
   preferredProvider?: string;
 }): Promise<AnalysisResult> {
-  const geminiKey = process.env["GEMINI_API_KEY"];
-  const groqKey = process.env["GROQ_API_KEY"];
-  const openrouterKey = process.env["OPENROUTER_API_KEY"];
-  const lovableKey = process.env["LOVABLE_API_KEY"];
-  const deepseekKey = process.env["DEEPSEEK_API_KEY"];
-
-
   // Build the list of providers to try
   const providersToTry: AIProvider[] = [];
 
@@ -184,8 +177,8 @@ export async function analyzeWithAI(input: {
     providersToTry.push(envProvider);
   }
 
-  // 3. Fallback list in order of speed/preference (custom -> groq -> gemini -> deepseek -> openrouter -> lovable)
-  const defaultOrder: AIProvider[] = ["custom", "groq", "gemini", "deepseek", "openrouter", "lovable"];
+  // 3. Fallback list in order of speed and capability (groq -> gemini -> deepseek -> openrouter -> lovable -> custom)
+  const defaultOrder: AIProvider[] = ["groq", "gemini", "deepseek", "openrouter", "lovable", "custom"];
   for (const p of defaultOrder) {
     if (hasKey(p) && !providersToTry.includes(p)) {
       providersToTry.push(p);
@@ -193,20 +186,12 @@ export async function analyzeWithAI(input: {
   }
 
   if (providersToTry.length === 0) {
-    throw new Error("AI is not configured. Please set GEMINI_API_KEY, GROQ_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY, CUSTOM_API_URL, or LOVABLE_API_KEY in your environment.");
+    throw new Error("AI is not configured. Please set GROQ_API_KEY, GEMINI_API_KEY, DEEPSEEK_API_KEY, OPENROUTER_API_KEY, or LOVABLE_API_KEY in your environment.");
   }
-
-  // Proactively skip Groq for very large documents if we are in auto-select mode to avoid 413 token limits
-  const isTooLargeForGroq = input.text.length > 25000;
 
   let lastError: Error | null = null;
 
   for (const provider of providersToTry) {
-    if (provider === "groq" && isTooLargeForGroq && input.preferredProvider !== "groq") {
-      console.log(`[AI] Skipping Groq for large document (${input.text.length} chars) to avoid 413 rate limit.`);
-      continue;
-    }
-
     try {
       const config = resolveAIProvider(provider);
       console.log(`[AI] Attempting analysis using ${provider} with model ${config.model}...`);
