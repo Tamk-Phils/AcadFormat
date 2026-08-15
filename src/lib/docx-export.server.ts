@@ -376,7 +376,8 @@ function renderPage(
         );
         break;
       case "listline": {
-        const [left, right] = block.text.split("\t");
+        const textStr = typeof block.text === "string" ? block.text : String(block.text ?? "");
+        const [left, right] = textStr.split("\t");
         const indent = ((block.level ?? 1) - 1) * 360;
         const bold = block.bold === true || (block.level === 1);
         elements.push(

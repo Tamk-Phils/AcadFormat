@@ -225,7 +225,8 @@ function cleanDept(dept: string): string {
 
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
   const blocks: Block[] = [];
-  const rawLines = content.split("\n");
+  const textStr = typeof content === "string" ? content : String(content ?? "");
+  const rawLines = textStr.split("\n");
   const lines: string[] = [];
   rawLines.forEach((rawLine) => {
     // Pre-split inline [IMAGE:...] markers so they become standalone line items
@@ -685,14 +686,15 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
 
       tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
       blocks.push({ type: "caption", text: `${label}: ${table.title}` });
-      if (table.originalLabel && table.originalLabel.includes("|")) {
-        const rows = table.originalLabel
+      const origLabelStr = typeof table.originalLabel === "string" ? table.originalLabel : "";
+      if (origLabelStr && origLabelStr.includes("|")) {
+        const rows = origLabelStr
           .split("\n")
           .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
           .filter((r) => r.length > 0);
-        blocks.push({ type: "table", text: table.originalLabel, tableRows: rows });
+        blocks.push({ type: "table", text: origLabelStr, tableRows: rows });
       } else {
-        blocks.push({ type: "center", text: `[ ${table.originalLabel || "Table content"} ]` });
+        blocks.push({ type: "center", text: `[ ${origLabelStr || "Table content"} ]` });
       }
     }
 

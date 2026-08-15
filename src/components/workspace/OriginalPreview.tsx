@@ -37,10 +37,11 @@ export function OriginalPreview({
               </h3>
             );
           if (block.type === "table") {
+            const textStr = typeof block.text === "string" ? block.text : "";
             const rows =
               block.tableRows && block.tableRows.length > 0
                 ? block.tableRows
-                : (block.text || "")
+                : textStr
                     .split("\n")
                     .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
                     .filter((r) => r.length > 0);

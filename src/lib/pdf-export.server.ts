@@ -350,7 +350,8 @@ export async function buildPdf(
       else if (block.type === "caption")
         write(block.text, { font: italic, size: baseSize - 1, align: "center" });
       else if (block.type === "listline") {
-        const [left, right] = block.text.split("\t");
+        const textStr = typeof block.text === "string" ? block.text : String(block.text ?? "");
+        const [left, right] = textStr.split("\t");
         const isBold = block.bold === true || block.level === 1;
         const font = isBold ? bold : regular;
 

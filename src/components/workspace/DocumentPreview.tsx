@@ -164,7 +164,8 @@ export function DocumentPreview({
                   </p>
                 );
               if (block.type === "listline") {
-                const [left, right] = block.text.split("\t");
+                const textStr = typeof block.text === "string" ? block.text : String(block.text ?? "");
+                const [left, right] = textStr.split("\t");
                 return (
                   <p
                     key={index}

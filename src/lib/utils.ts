@@ -11,7 +11,7 @@ export function parseTableRows(block: { tableRows?: string[][]; text?: string })
     rows = block.tableRows.filter(
       (row) => row.length > 0 && !row.every((cell) => !cell.trim() || /^[:\-\s]+$/.test(cell.trim()))
     );
-  } else if (block.text) {
+  } else if (typeof block.text === "string" && block.text) {
     const lines = block.text.split("\n");
     for (const line of lines) {
       const trimmedLine = line.trim();
