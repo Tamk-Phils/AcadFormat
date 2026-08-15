@@ -42,14 +42,24 @@ export function DocumentPreview({
                 );
               if (block.type === "image") {
                 const url = block.imageId ? assetUrls[block.imageId] : undefined;
-                if (!url) return null;
+                if (!url) {
+                  return (
+                    <div key={index} className="my-4 p-5 border-2 border-dashed border-neutral-400 bg-neutral-50 rounded-lg text-center font-serif text-neutral-800 max-w-lg mx-auto">
+                      <div className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-1">Figure Asset</div>
+                      <p className="text-xs italic text-neutral-600">{block.text || "Embedded figure preserved from document source."}</p>
+                    </div>
+                  );
+                }
                 return (
-                  <img
-                    key={index}
-                    src={url}
-                    alt={block.text || "Figure"}
-                    className="mx-auto my-3 max-h-80 w-auto max-w-full"
-                  />
+                  <div key={index} className="my-4 text-center">
+                    <img
+                      key={index}
+                      src={url}
+                      alt={block.text || "Figure"}
+                      className="mx-auto max-h-80 w-auto max-w-full rounded shadow-sm"
+                    />
+                    {block.text && <p className="mt-2 text-xs italic text-center font-serif text-black">{block.text}</p>}
+                  </div>
                 );
               }
               if (block.type === "title") {

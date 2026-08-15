@@ -357,8 +357,26 @@ function Workspace() {
                 <Field label="Problem" value={understanding.problem} />
                 <Field label="Methodology" value={understanding.methodology} />
                 <Field label="Conclusions" value={understanding.conclusions} />
-                <Field label="Objectives" value={understanding.objectives?.join(" · ")} />
-                <Field label="Key findings" value={understanding.findings?.join(" · ")} />
+                <Field
+                  label="Objectives"
+                  value={
+                    Array.isArray(understanding.objectives)
+                      ? understanding.objectives.join(" · ")
+                      : typeof understanding.objectives === "string"
+                        ? understanding.objectives
+                        : ""
+                  }
+                />
+                <Field
+                  label="Key findings"
+                  value={
+                    Array.isArray(understanding.findings)
+                      ? understanding.findings.join(" · ")
+                      : typeof understanding.findings === "string"
+                        ? understanding.findings
+                        : ""
+                  }
+                />
               </div>
             )}
 
@@ -612,7 +630,13 @@ function Workspace() {
                       id="meta-supervisors"
                       type="text"
                       className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.supervisors?.join(", ") || ""}
+                      value={
+                        Array.isArray((doc.data.model as any).meta?.supervisors)
+                          ? (doc.data.model as any).meta.supervisors.join(", ")
+                          : typeof (doc.data.model as any).meta?.supervisors === "string"
+                            ? (doc.data.model as any).meta.supervisors
+                            : ""
+                      }
                       onChange={async (e) => {
                         const supervisors = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
                         const nextMeta = { ...(doc.data.model as any).meta, supervisors };
@@ -647,7 +671,7 @@ function Workspace() {
                 <CardTitle className="font-display text-2xl">4 · Verify &amp; preview</CardTitle>
                 <CardDescription>
                   {audit?.pageCount} pages rebuilt ·{" "}
-                  {audit?.passed ? "final check passed" : `${audit?.findings.length} item(s) to review`}
+                  {audit?.passed ? "final check passed" : `${Array.isArray(audit?.findings) ? audit.findings.length : 0} item(s) to review`}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -664,7 +688,7 @@ function Workspace() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              {audit && audit.findings.length > 0 && (
+              {audit && Array.isArray(audit.findings) && audit.findings.length > 0 && (
                 <ul className="list-disc space-y-1 rounded-lg border border-border bg-secondary/40 p-4 pl-8 text-sm">
                   {audit.findings.map((finding: string) => (
                     <li key={finding}>{finding}</li>

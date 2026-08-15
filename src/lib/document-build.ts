@@ -252,35 +252,54 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   const flushTable = () => {
     if (tableLines.length === 0) return;
 
-    const rows: string[][] = [];
+    let tableCaptionText = "";
+    const rawRows: string[][] = [];
+
     tableLines.forEach((line) => {
+      const trimmedLine = line.trim();
+      if (/^table\s+\d+/i.test(trimmedLine) || /^tab\.\s*\d+/i.test(trimmedLine)) {
+        tableCaptionText = trimmedLine;
+        return;
+      }
+
       let cells: string[] = [];
-      if (line.includes("  |  ")) {
-        cells = line.split("  |  ");
-      } else if (line.includes("|")) {
-        cells = line.split("|");
-        if (line.trim().startsWith("|")) cells.shift();
-        if (line.trim().endsWith("|")) cells.pop();
-      } else if (line.includes("\t")) {
-        cells = line.split("\t");
-      } else if (/\s{3,}/.test(line)) {
-        cells = line.split(/\s{3,}/);
+      if (trimmedLine.includes("  |  ")) {
+        cells = trimmedLine.split("  |  ");
+      } else if (trimmedLine.includes("|")) {
+        cells = trimmedLine.split("|");
+        if (trimmedLine.startsWith("|")) cells.shift();
+        if (trimmedLine.endsWith("|")) cells.pop();
+      } else if (trimmedLine.includes("\t")) {
+        cells = trimmedLine.split("\t");
+      } else if (/\s{3,}/.test(trimmedLine)) {
+        cells = trimmedLine.split(/\s{3,}/);
       } else {
-        cells = [line];
+        cells = [trimmedLine];
       }
 
       const trimmedCells = cells.map((c) => c.trim());
       const isSeparator = trimmedCells.every((c) => !c || /^[:\-\s]+$/.test(c));
       if (!isSeparator && trimmedCells.some((c) => c.length > 0)) {
-        rows.push(trimmedCells);
+        rawRows.push(trimmedCells);
       }
     });
 
-    if (rows.length > 0) {
+    if (tableCaptionText) {
+      blocks.push({ type: "caption", text: tableCaptionText });
+    }
+
+    if (rawRows.length > 0) {
+      const maxCols = Math.max(...rawRows.map((r) => r.length));
+      const paddedRows = rawRows.map((r) => {
+        const copy = [...r];
+        while (copy.length < maxCols) copy.push("");
+        return copy;
+      });
+
       blocks.push({
         type: "table",
         text: tableLines.join("\n"),
-        tableRows: rows,
+        tableRows: paddedRows,
       });
     }
     tableLines = [];
@@ -786,7 +805,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
           "DEPARTMENT OF",
           cleanDept(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()
         ],
-        imageIds: isColtech ? ["logo-uba", "logo-coltech"] : ["logo-uba"]
+        imageIds: ["logo-uba"]
       },
       { type: "spacer" as const, text: "" },
       {
@@ -852,7 +871,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
                 }
                 return lines;
               })(),
-              imageIds: logoImages.map((image) => image.id),
+              imageIds: isColtech ? ["logo-uba", "logo-coltech"] : ["logo-uba"],
             },
           ]
         : [

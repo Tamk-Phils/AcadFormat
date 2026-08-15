@@ -267,7 +267,30 @@ export async function buildPdf(
       if (block.type === "logos" || block.type === "image") {
         const ids = block.type === "logos" ? (block.imageIds ?? []) : block.imageId ? [block.imageId] : [];
         const assets = ids.map((id) => embedded.get(id)).filter((a): a is PDFImage => Boolean(a));
-        if (assets.length === 0) continue;
+        if (assets.length === 0) {
+          if (block.type === "image") {
+            const figText = block.text || "Figure Illustration";
+            ensure(35);
+            sheet.drawRectangle({
+              x: margin.left + 40,
+              y: y - 30,
+              width: contentWidth - 80,
+              height: 30,
+              borderColor: rgb(0.5, 0.5, 0.5),
+              borderWidth: 1,
+            });
+            const textWidth = italic.widthOfTextAtSize(figText, baseSize - 1);
+            sheet.drawText(figText, {
+              x: margin.left + (contentWidth - textWidth) / 2,
+              y: y - 20,
+              size: baseSize - 1,
+              font: italic,
+              color: rgb(0.3, 0.3, 0.3),
+            });
+            y -= 40;
+          }
+          continue;
+        }
         const maxHeight = block.type === "logos" ? 70 : 250;
         const scaled = assets.map((asset) => {
           const ratio = Math.min(

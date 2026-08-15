@@ -16,29 +16,29 @@ export function SiteHeader({ user }: { user?: User | null }) {
   }
 
   return (
-    <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-        <Link to="/" className="flex items-center gap-2">
-          <img src="/logo.png" alt="AcadFormat" className="h-9 w-auto object-contain" />
+    <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-md">
+      <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6">
+        <Link to="/" className="flex items-center gap-2 shrink-0">
+          <img src="/logo.png" alt="AcadFormat" className="h-8 w-auto object-contain sm:h-9" />
         </Link>
-        <nav className="flex items-center gap-1 sm:gap-2">
-          <Button asChild variant="ghost" size="sm">
+        <nav className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+          <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
             <Link to="/docs">Documentation</Link>
           </Button>
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
             <Link to="/institutions">Institutions</Link>
           </Button>
           {user ? (
             <>
-              <Button asChild variant="ghost" size="sm">
+              <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
                 <Link to="/dashboard">My documents</Link>
               </Button>
-              <Button variant="outline" size="sm" onClick={signOut}>
+              <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm" onClick={signOut}>
                 Sign out
               </Button>
             </>
           ) : (
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="h-8 px-3 text-xs sm:text-sm">
               <Link to="/auth">Sign in</Link>
             </Button>
           )}

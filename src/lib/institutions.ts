@@ -63,7 +63,7 @@ export interface InstitutionConfig {
 
 export const COLTECH_CONFIG: InstitutionConfig = {
   id: "coltech-dissertation",
-  label: "COLTECH — Dissertation / Thesis",
+  label: "COLTECH — Dissertation / Thesis / End of Course Project",
   source: "Format of Dissertations and Theses in COLTECH (UBa, April 2020)",
   font: "Times New Roman",
   fontSizePt: 12,
@@ -78,7 +78,7 @@ export const COLTECH_CONFIG: InstitutionConfig = {
   bodyNumbering: "arabic",
   coverPageNumbered: false,
   startPageNumberingFrom: "COPYRIGHT",
-  coverLogoCount: 2,
+  coverLogoCount: 1,
   preliminaryOrder: [
     "COVER_PAGE",
     "TITLE_PAGE",
@@ -349,6 +349,18 @@ export const HITL_CONFIG: InstitutionConfig = {
   ]
 };
 
+export const HICM_CONFIG: InstitutionConfig = {
+  ...COMMON_CONFIG,
+  id: "hicm-project",
+  label: "HICM — Project Report",
+  source: "Formatting Guidelines, Higher Institute of Commerce and Management (HICM)",
+  notes: [
+    "HICM formatting standard for business, management, accounting and finance projects.",
+    "Times New Roman 12pt, 1.5 line spacing.",
+    "APA referencing style.",
+  ]
+};
+
 export const UNIVERSITIES = [
   {
     name: "The University of Bamenda",
@@ -363,18 +375,21 @@ export const UNIVERSITIES = [
           "Mechanical and Industrial Engineering",
           "Agricultural and Environmental Engineering",
           "Food Science and Technology",
-          "Mathematics and Computer Science",
+          "Forestry and Wildlife Engineering",
         ],
       },
       {
         name: "Faculty of Science",
         configId: FS_CONFIG.id,
-        departments: ["Computer Science", "Physics", "Chemistry", "Biology"],
-      },
-      {
-        name: "Higher Technical Teacher Training College (HTTTC)",
-        configId: HTTTC_CONFIG.id,
-        departments: ["Computer Science", "Electrical Engineering", "Civil Engineering"],
+        departments: [
+          "Computer Science",
+          "Physics",
+          "Chemistry",
+          "Biochemistry",
+          "Biological Sciences",
+          "Geology / Earth Sciences",
+          "Mathematics",
+        ],
       },
       {
         name: "National Higher Polytechnic Institute (NAHPI)",
@@ -382,27 +397,12 @@ export const UNIVERSITIES = [
         departments: [
           "Computer Engineering",
           "Electrical and Electronic Engineering",
-          "Civil Engineering",
-          "Mechanical Engineering",
+          "Civil Engineering and Architecture",
+          "Mechanical and Industrial Engineering",
           "Petroleum Engineering",
           "Chemical Engineering",
           "Biomedical Engineering",
-        ],
-      },
-      {
-        name: "Higher Teacher Training College (HTTC) Bambili",
-        configId: HTTC_CONFIG.id,
-        departments: [
-          "Computer Science",
-          "Mathematics",
-          "Physics",
-          "Chemistry",
-          "Biology",
-          "English Modern Letters",
-          "French",
-          "History",
-          "Geography",
-          "Educational Psychology",
+          "Financial Engineering",
         ],
       },
       {
@@ -418,21 +418,39 @@ export const UNIVERSITIES = [
         ],
       },
       {
+        name: "Higher Institute of Commerce and Management (HICM)",
+        configId: HICM_CONFIG.id,
+        departments: [
+          "Accounting and Finance",
+          "Management and Entrepreneurship",
+          "Marketing",
+          "Business Studies",
+          "Insurance and Security",
+        ],
+      },
+      {
         name: "Faculty of Law and Political Science (FLPS)",
         configId: FLPS_CONFIG.id,
-        departments: ["English Law", "French Law", "Political Science", "International Relations"],
+        departments: [
+          "English Law (Common Law)",
+          "Private Law (French Law)",
+          "Public Law",
+          "Political Science",
+          "International Relations",
+        ],
       },
       {
         name: "Faculty of Arts (FA)",
         configId: FA_CONFIG.id,
         departments: [
-          "English",
-          "French",
-          "Linguistics",
-          "History",
-          "Geography",
-          "Journalism and Mass Communication",
+          "English Modern Letters",
+          "French Modern Letters",
+          "Communication and Development Studies",
+          "Linguistics and African Languages",
+          "History and Archaeology",
+          "Geography and Planning",
           "Performing and Visual Arts",
+          "Philosophy",
         ],
       },
       {
@@ -440,7 +458,7 @@ export const UNIVERSITIES = [
         configId: FHS_CONFIG.id,
         departments: [
           "Medicine",
-          "Nursing",
+          "Nursing Science",
           "Midwifery",
           "Medical Laboratory Sciences",
           "Public Health",
@@ -448,14 +466,56 @@ export const UNIVERSITIES = [
         ],
       },
       {
+        name: "Higher Technical Teacher Training College (HTTTC) Bambili",
+        configId: HTTTC_CONFIG.id,
+        departments: [
+          "Computer Science",
+          "Electrical and Power Engineering",
+          "Civil Engineering and Forestry",
+          "Mechanical Engineering",
+          "Administrative Techniques",
+          "Economic Sciences and Science of Education",
+          "Renewable Energy",
+        ],
+      },
+      {
+        name: "Higher Teacher Training College (HTTC) Bambili",
+        configId: HTTC_CONFIG.id,
+        departments: [
+          "Computer Science",
+          "Mathematics",
+          "Physics",
+          "Chemistry",
+          "Biology",
+          "English Modern Letters",
+          "French Modern Letters",
+          "Bilingual Letters",
+          "History",
+          "Geography",
+          "Educational Psychology / Science of Education",
+        ],
+      },
+      {
         name: "Higher Institute of Transport and Logistics (HITL)",
         configId: HITL_CONFIG.id,
-        departments: ["Transport and Logistics", "Supply Chain Management"],
+        departments: [
+          "Logistics and Supply Chain Management",
+          "Land Transport",
+          "Maritime Transport",
+          "Air Transport",
+          "Customs and Transit",
+        ],
       },
       {
         name: "College of Agriculture and Veterinary Medicine (COLTECH-AVM)",
         configId: COLTECH_CONFIG.id,
-        departments: ["Animal Production", "Crop Production", "Veterinary Medicine"],
+        departments: [
+          "Animal Production and Technology",
+          "Crop Production and Technology",
+          "Agricultural Economics and Agribusiness",
+          "Forestry and Wildlife Management",
+          "Veterinary Medicine",
+        ],
       },
     ],
   },
@@ -551,6 +611,7 @@ export function getConfig(configId: string): InstitutionConfig {
   if (configId === FA_CONFIG.id) return FA_CONFIG;
   if (configId === FHS_CONFIG.id) return FHS_CONFIG;
   if (configId === HITL_CONFIG.id) return HITL_CONFIG;
+  if (configId === HICM_CONFIG.id) return HICM_CONFIG;
   return COMMON_CONFIG;
 }
 

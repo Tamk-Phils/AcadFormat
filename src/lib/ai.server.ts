@@ -400,7 +400,30 @@ function normalize(result: AnalysisResult): AnalysisResult {
     }));
 
   return {
-    understanding: result.understanding,
+    understanding: result.understanding
+      ? {
+          ...result.understanding,
+          objectives: Array.isArray(result.understanding.objectives)
+            ? result.understanding.objectives
+            : typeof result.understanding.objectives === "string"
+              ? [result.understanding.objectives]
+              : [],
+          findings: Array.isArray(result.understanding.findings)
+            ? result.understanding.findings
+            : typeof result.understanding.findings === "string"
+              ? [result.understanding.findings]
+              : [],
+          researchQuestions: Array.isArray(result.understanding.researchQuestions)
+            ? result.understanding.researchQuestions
+            : [],
+          technologies: Array.isArray(result.understanding.technologies)
+            ? result.understanding.technologies
+            : [],
+          terminology: Array.isArray(result.understanding.terminology)
+            ? result.understanding.terminology
+            : [],
+        }
+      : result.understanding,
     health: result.health,
     issues: (result.issues || []).map((issue) => ({
       ...issue,

@@ -254,7 +254,7 @@ function renderPage(
       }
       case "image": {
         const asset = block.imageId ? images.get(block.imageId) : undefined;
-        if (asset)
+        if (asset) {
           elements.push(
             new Paragraph({
               alignment: AlignmentType.CENTER,
@@ -273,6 +273,23 @@ function renderPage(
               ],
             }),
           );
+        } else {
+          elements.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 180, after: 180 },
+              children: [
+                new TextRun({
+                  ...common,
+                  text: `[ ${block.text || "Figure Illustration"} ]`,
+                  italics: true,
+                  bold: true,
+                  size: size - 2,
+                }),
+              ],
+            }),
+          );
+        }
         break;
       }
       case "title":
