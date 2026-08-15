@@ -211,18 +211,16 @@ function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: bo
   if (!prev || !curr) return false;
 
   if (hasEmptyLineBetween) {
-    // Only merge across an empty line if the current line starts with lowercase (i.e. is an accidental line-wrap)
+    // Only merge across an empty line if current line starts with lowercase
     return /^[a-z]/.test(curr);
   }
 
-  // If there was no empty line, merge if the current line starts with lowercase
-  if (/^[a-z]/.test(curr)) return true;
+  // Consecutive non-empty lines in the source text belong to the same paragraph
+  return true;
+}
 
-  // Merge if previous line doesn't end with terminal punctuation
-  const endsWithTerminal = /[.!?:]\s*$/.test(prev);
-  if (!endsWithTerminal) return true;
-
-  return false;
+function cleanDept(dept: string): string {
+  return (dept || "").replace(/^department\s+of\s+/i, "").trim();
 }
 
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
@@ -261,6 +259,8 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         if (line.trim().endsWith("|")) cells.pop();
       } else if (line.includes("\t")) {
         cells = line.split("\t");
+      } else if (/\s{3,}/.test(line)) {
+        cells = line.split(/\s{3,}/);
       } else {
         cells = [line];
       }
@@ -298,9 +298,15 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       if (inTable) flushTable();
       const imageIndex = imageMatch[1];
       const imageId = imageIndex !== undefined ? `img-${imageIndex}` : undefined;
-      const exists = imageId ? finalImages.some((img) => img.id === imageId) : false;
-      if (exists) {
-        blocks.push({ type: "image", text: "", imageId: imageId! });
+      const foundImage = finalImages.find((img) =>
+        img.id === imageId || img.id === `img-${imageIndex}` || img.id === imageIndex
+      ) || (imageIndex !== undefined ? finalImages[Number(imageIndex)] : undefined);
+
+      if (foundImage) {
+        blocks.push({ type: "image", text: "", imageId: foundImage.id });
+      } else if (finalImages.length > 0) {
+        const fallback = finalImages[blocks.filter(b => b.type === "image").length % finalImages.length];
+        blocks.push({ type: "image", text: "", imageId: fallback!.id });
       } else {
         blocks.push({ type: "center", text: `[ Figure Image ${imageIndex || ""} ]` });
       }
@@ -748,7 +754,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         left: leftSchoolLines,
         right: [
           "DEPARTMENT OF",
-          (meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()
+          cleanDept(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()
         ],
         imageIds: ["logo-uba"]
       },
@@ -761,7 +767,7 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       { type: "spacer" as const, text: "" },
       {
         type: "center" as const,
-        text: `A ${workLabel(selection.documentType, selection.level)} Submitted to the Department of ${(meta.department || selection.department || "Computer Engineering")} in the ${selection.school} of the University of Bamenda in Partial Fulfillment of the Requirements for the Award of a ${selection.level || "Bachelor of Science"} Degree in ${(meta.department || selection.department || "Computer Engineering")}.`,
+        text: `A ${workLabel(selection.documentType, selection.level)} Submitted to the Department of ${cleanDept(meta.department || selection.department || "Computer Engineering")} in the ${selection.school} of the University of Bamenda in Partial Fulfillment of the Requirements for the Award of a ${selection.level || "Bachelor of Science"} Degree in ${cleanDept(meta.department || selection.department || "Computer Engineering")}.`,
         italic: true
       },
       { type: "spacer" as const, text: "" },

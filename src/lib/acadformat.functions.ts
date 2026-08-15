@@ -7,7 +7,7 @@ import { buildDocx, type ImageAsset } from "./docx-export.server";
 import { buildPdf } from "./pdf-export.server";
 import { extractDocument } from "./extract.server";
 import { analyzeWithAI, chatEditDocument } from "./ai.server";
-import { restoreVerbatimContent } from "./verbatim";
+import { getLogoBytes } from "./static-assets";
 import { ensureDocumentsBucket } from "./storage-bootstrap.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -179,12 +179,13 @@ export const exportDocx = createServerFn({ method: "POST" })
     const images = new Map<string, ImageAsset>();
     for (const image of final.images ?? []) {
       let bytes: Uint8Array;
-      if (image.path.startsWith("public/") || image.path.startsWith("logo-")) {
-        const fs = await import("node:fs");
-        const path = await import("node:path");
-        const filePath = path.join(process.cwd(), image.path.startsWith("public/") ? image.path : `public/${image.path}`);
-        if (fs.existsSync(filePath)) {
-          bytes = new Uint8Array(fs.readFileSync(filePath));
+      let contentType = image.contentType;
+
+      if (image.path.startsWith("public/") || image.path.startsWith("logo-") || image.id.startsWith("logo-")) {
+        const logo = await getLogoBytes(image.id);
+        if (logo) {
+          bytes = logo.data;
+          contentType = logo.contentType;
         } else {
           continue;
         }
@@ -195,11 +196,11 @@ export const exportDocx = createServerFn({ method: "POST" })
       }
       images.set(image.id, {
         data: bytes,
-        type: /jpe?g/i.test(image.contentType)
+        type: /jpe?g/i.test(contentType)
           ? "jpg"
-          : /gif/i.test(image.contentType)
+          : /gif/i.test(contentType)
             ? "gif"
-            : /bmp/i.test(image.contentType)
+            : /bmp/i.test(contentType)
               ? "bmp"
               : "png",
       });
@@ -231,12 +232,13 @@ export const exportPdf = createServerFn({ method: "POST" })
     const images = new Map<string, { data: Uint8Array; contentType: string }>();
     for (const image of final.images ?? []) {
       let bytes: Uint8Array;
-      if (image.path.startsWith("public/") || image.path.startsWith("logo-")) {
-        const fs = await import("node:fs");
-        const path = await import("node:path");
-        const filePath = path.join(process.cwd(), image.path.startsWith("public/") ? image.path : `public/${image.path}`);
-        if (fs.existsSync(filePath)) {
-          bytes = new Uint8Array(fs.readFileSync(filePath));
+      let contentType = image.contentType;
+
+      if (image.path.startsWith("public/") || image.path.startsWith("logo-") || image.id.startsWith("logo-")) {
+        const logo = await getLogoBytes(image.id);
+        if (logo) {
+          bytes = logo.data;
+          contentType = logo.contentType;
         } else {
           continue;
         }
@@ -247,7 +249,7 @@ export const exportPdf = createServerFn({ method: "POST" })
       }
       images.set(image.id, {
         data: bytes,
-        contentType: image.contentType,
+        contentType,
       });
     }
     const base64 = await buildPdf(
