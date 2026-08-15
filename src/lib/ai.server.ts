@@ -64,13 +64,13 @@ interface ProviderConfig {
 }
 
 function resolveAIProvider(provider: AIProvider): ProviderConfig {
-  const geminiKey = process.env["GEMINI_API_KEY"];
-  const groqKey = process.env["GROQ_API_KEY"];
-  const openrouterKey = process.env["OPENROUTER_API_KEY"];
-  const lovableKey = process.env["LOVABLE_API_KEY"];
-  const deepseekKey = process.env["DEEPSEEK_API_KEY"];
-  const customKey = process.env["CUSTOM_API_KEY"];
-  const customUrl = process.env["CUSTOM_API_URL"];
+  const geminiKey = process.env["GEMINI_API_KEY"] || "";
+  const groqKey = process.env["GROQ_API_KEY"] || "";
+  const openrouterKey = process.env["OPENROUTER_API_KEY"] || "";
+  const lovableKey = process.env["LOVABLE_API_KEY"] || "";
+  const deepseekKey = process.env["DEEPSEEK_API_KEY"] || "";
+  const customKey = process.env["CUSTOM_API_KEY"] || "";
+  const customUrl = process.env["CUSTOM_API_URL"] || "";
 
   switch (provider) {
     case "groq":
@@ -177,8 +177,8 @@ export async function analyzeWithAI(input: {
     providersToTry.push(envProvider);
   }
 
-  // 3. Fallback list in order of speed and capability (groq -> gemini -> deepseek -> openrouter -> lovable -> custom)
-  const defaultOrder: AIProvider[] = ["groq", "gemini", "deepseek", "openrouter", "lovable", "custom"];
+  // 3. Fallback list in order of speed and reliability (groq -> gemini -> deepseek -> lovable -> custom -> openrouter)
+  const defaultOrder: AIProvider[] = ["groq", "gemini", "deepseek", "lovable", "custom", "openrouter"];
   for (const p of defaultOrder) {
     if (hasKey(p) && !providersToTry.includes(p)) {
       providersToTry.push(p);
