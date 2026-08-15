@@ -230,6 +230,17 @@ export const ASSIGNMENT_CONFIG: InstitutionConfig = {
   ],
 };
 
+export const COLTECH_ASSIGNMENT_CONFIG: InstitutionConfig = {
+  ...ASSIGNMENT_CONFIG,
+  id: "coltech-assignment",
+  label: "COLTECH — Assignment / Coursework",
+  coverLogoCount: 2,
+  notes: [
+    ...ASSIGNMENT_CONFIG.notes,
+    "COLTECH cover page carries two logos: University of Bamenda on the left and COLTECH on the right.",
+  ],
+};
+
 export const NAHPI_CONFIG: InstitutionConfig = {
   ...COMMON_CONFIG,
   id: "nahpi-project",
@@ -527,6 +538,7 @@ export function workLabel(documentType: string, level: string): string {
 
 export function getConfig(configId: string): InstitutionConfig {
   if (configId === ASSIGNMENT_CONFIG.id) return ASSIGNMENT_CONFIG;
+  if (configId === COLTECH_ASSIGNMENT_CONFIG.id) return COLTECH_ASSIGNMENT_CONFIG;
   if (configId === INTERNSHIP_CONFIG.id) return INTERNSHIP_CONFIG;
   if (configId === COLTECH_INTERNSHIP_CONFIG.id) return COLTECH_INTERNSHIP_CONFIG;
   if (configId === COLTECH_CONFIG.id) return COLTECH_CONFIG;
@@ -543,17 +555,25 @@ export function getConfig(configId: string): InstitutionConfig {
 }
 
 /**
- * Assignments never follow the dissertation structure, so the document type
- * wins over the school configuration when it is set to "Assignment".
+ * Assignments and Internship Reports follow their specific outlines and win over
+ * default dissertation configurations when specified.
  */
 export function resolveConfig(selection: {
   configId: string;
   documentType?: string;
+  school?: string;
 }): InstitutionConfig {
-  if (selection.documentType === "Assignment") return ASSIGNMENT_CONFIG;
-  if (selection.documentType === "Internship Report")
-    return selection.configId === COLTECH_CONFIG.id
-      ? COLTECH_INTERNSHIP_CONFIG
-      : INTERNSHIP_CONFIG;
+  const schoolStr = selection.school || "";
+  const isColtech =
+    selection.configId === COLTECH_CONFIG.id ||
+    schoolStr.toLowerCase().includes("college of technology") ||
+    schoolStr.toLowerCase().includes("coltech");
+
+  if (selection.documentType === "Assignment") {
+    return isColtech ? COLTECH_ASSIGNMENT_CONFIG : ASSIGNMENT_CONFIG;
+  }
+  if (selection.documentType === "Internship Report") {
+    return isColtech ? COLTECH_INTERNSHIP_CONFIG : INTERNSHIP_CONFIG;
+  }
   return getConfig(selection.configId);
 }

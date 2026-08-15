@@ -563,6 +563,19 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
               ? `Figure ${chapterNumber}.${figIdx + 1}`
               : `Figure ${listOfFigures.length + figIdx + 1}`;
 
+          // Deduplicate: if preceding block is a duplicate caption/text line, pop it
+          if (blocks.length > 0) {
+            const lastBlock = blocks[blocks.length - 1];
+            if (
+              lastBlock &&
+              (lastBlock.type === "caption" || lastBlock.type === "para" || lastBlock.type === "center") &&
+              (lastBlock.text.toLowerCase().includes(figure.caption.toLowerCase().slice(0, 15)) ||
+                /^figure\s+\d+/i.test(lastBlock.text.trim()))
+            ) {
+              blocks.pop();
+            }
+          }
+
           blocks.push({
             ...block,
             text: figure.caption,
@@ -582,6 +595,19 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
             config.tableNumbering === "chapter"
               ? `Table ${chapterNumber}.${tabIdx + 1}`
               : `Table ${listOfTables.length + tabIdx + 1}`;
+
+          // Deduplicate: if preceding block is a duplicate caption/text line, pop it
+          if (blocks.length > 0) {
+            const lastBlock = blocks[blocks.length - 1];
+            if (
+              lastBlock &&
+              (lastBlock.type === "caption" || lastBlock.type === "para" || lastBlock.type === "center") &&
+              (lastBlock.text.toLowerCase().includes(table.title.toLowerCase().slice(0, 15)) ||
+                /^table\s+\d+/i.test(lastBlock.text.trim()))
+            ) {
+              blocks.pop();
+            }
+          }
 
           tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
           blocks.push({ type: "caption", text: `${label}: ${table.title}` });
