@@ -105,7 +105,6 @@ function saveStoredReviews(reviews: ReviewItem[]) {
 }
 
 export async function fetchPublicReviews(): Promise<ReviewItem[]> {
-  // Try fetching from Supabase reviews table first
   try {
     const { data, error } = await supabase
       .from("reviews" as any)
@@ -113,15 +112,17 @@ export async function fetchPublicReviews(): Promise<ReviewItem[]> {
       .eq("status", "approved")
       .order("created_at", { ascending: false });
 
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data) && data.length > 0) {
       return data as ReviewItem[];
     }
   } catch (err) {
-    // Fallback to local storage
+    console.error("Error fetching public reviews from Supabase:", err);
   }
 
   const reviews = getStoredReviews();
-  return reviews.filter((r) => r.status === "approved");
+  return (Array.isArray(reviews) ? reviews : INITIAL_SEED_REVIEWS).filter(
+    (r) => r && r.status === "approved"
+  );
 }
 
 export async function fetchAllReviewsAdmin(): Promise<ReviewItem[]> {
@@ -131,14 +132,15 @@ export async function fetchAllReviewsAdmin(): Promise<ReviewItem[]> {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data) && data.length > 0) {
       return data as ReviewItem[];
     }
   } catch (err) {
-    // Fallback
+    console.error("Error fetching admin reviews from Supabase:", err);
   }
 
-  return getStoredReviews();
+  const reviews = getStoredReviews();
+  return Array.isArray(reviews) ? reviews : INITIAL_SEED_REVIEWS;
 }
 
 export async function submitUserReview(

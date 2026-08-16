@@ -71,9 +71,15 @@ function ReviewsPage() {
 
   const loadReviews = async () => {
     setLoading(true);
-    const data = await fetchPublicReviews();
-    setReviews(data);
-    setLoading(false);
+    try {
+      const data = await fetchPublicReviews();
+      setReviews(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load reviews:", err);
+      setReviews([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,21 +117,23 @@ function ReviewsPage() {
     }
   };
 
-  const filteredReviews = reviews.filter((r) => {
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
+  const filteredReviews = safeReviews.filter((r) => {
+    if (!r) return false;
     const matchesCat = selectedCategory === "All" || r.category === selectedCategory;
-    const matchesRating = selectedRatingFilter === 0 || r.rating >= selectedRatingFilter;
+    const matchesRating = selectedRatingFilter === 0 || (r.rating || 5) >= selectedRatingFilter;
     const matchesSearch =
       searchQuery === "" ||
-      r.author_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.comment.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.recommendation.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.author_name && r.author_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.comment && r.comment.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.recommendation && r.recommendation.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (r.institution && r.institution.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCat && matchesRating && matchesSearch;
   });
 
   const avgRating =
-    reviews.length > 0
-      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+    safeReviews.length > 0
+      ? (safeReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / safeReviews.length).toFixed(1)
       : "5.0";
 
   return (
@@ -308,7 +316,7 @@ function ReviewsPage() {
                       )}
                     </div>
                     <span className="text-[10px] text-muted-foreground/70">
-                      {new Date(review.created_at).toLocaleDateString(undefined, {
+                      {new Date(review.created_at || Date.now()).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       })}

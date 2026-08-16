@@ -304,7 +304,9 @@ function AdminPage() {
     loadReviews();
   };
 
-  const filteredReviews = reviews.filter((r) => {
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
+  const filteredReviews = safeReviews.filter((r) => {
+    if (!r) return false;
     const matchesFilter =
       reviewFilter === "all" ||
       (reviewFilter === "approved" && r.status === "approved") ||
@@ -313,9 +315,9 @@ function AdminPage() {
 
     const matchesSearch =
       reviewSearch === "" ||
-      r.author_name.toLowerCase().includes(reviewSearch.toLowerCase()) ||
-      r.comment.toLowerCase().includes(reviewSearch.toLowerCase()) ||
-      r.recommendation.toLowerCase().includes(reviewSearch.toLowerCase());
+      (r.author_name && r.author_name.toLowerCase().includes(reviewSearch.toLowerCase())) ||
+      (r.comment && r.comment.toLowerCase().includes(reviewSearch.toLowerCase())) ||
+      (r.recommendation && r.recommendation.toLowerCase().includes(reviewSearch.toLowerCase()));
 
     return matchesFilter && matchesSearch;
   });
