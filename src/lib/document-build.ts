@@ -6,7 +6,7 @@ import type {
   RenderedPage,
 } from "./document-model";
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
-import { workLabel } from "./institutions";
+import { resolveConfig, workLabel } from "./institutions";
 import { parseTableRows } from "./utils";
 
 /** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
@@ -99,6 +99,25 @@ export function isHeaderFooterNoise(line: string, metaTitle?: string): boolean {
   }
 
   return false;
+}
+
+export function parsePdfTableLine(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (/^Device\s*\(Hostname\)\s+Interface\s+IP\s+Address/i.test(trimmed)) {
+    return ["Device (Hostname)", "Interface", "IP Address", "Subnet Mask", "Default Gateway"];
+  }
+  const addrMatch = trimmed.match(/^(S\d+|PC\d+)\s+(VLAN\s+\d+|NIC)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(N\/A|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  if (addrMatch) {
+    return [addrMatch[1]!, addrMatch[2]!, addrMatch[3]!, addrMatch[4]!, addrMatch[5]!];
+  }
+  if (/^Ports\s+Assignment\s+Network$/i.test(trimmed)) {
+    return ["Ports", "Assignment", "Network"];
+  }
+  const portMatch = trimmed.match(/^(Fa\d+\/\d+(?:\s*[–\-—]\s*0\/\d+)?)\s+(.*?)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s*\/\d+)$/i);
+  if (portMatch) {
+    return [portMatch[1]!, portMatch[2]!, portMatch[3]!];
+  }
+  return null;
 }
 
 export function isCodeLine(line: string): boolean {
@@ -335,7 +354,10 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       }
 
       let cells: string[] = [];
-      if (trimmedLine.includes("  |  ")) {
+      const pdfParsed = parsePdfTableLine(trimmedLine);
+      if (pdfParsed) {
+        cells = pdfParsed;
+      } else if (trimmedLine.includes("  |  ")) {
         cells = trimmedLine.split("  |  ");
       } else if (trimmedLine.includes("|")) {
         cells = trimmedLine.split("|");
@@ -447,9 +469,12 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       return (next.match(/\|/g) || []).length >= 1 || next.includes("\t") || /\S\s{2,}\S/.test(next) || (/^[:\|\-\s]{3,}$/.test(next) && next.includes("-"));
     };
 
+    const isPdfTableLine = Boolean(parsePdfTableLine(line));
+
     const isTableRow =
       !isCodeLine(line) &&
-      (hasPipes ||
+      (isPdfTableLine ||
+        hasPipes ||
         line.includes("  |  ") ||
         (line.startsWith("|") && line.endsWith("|")) ||
         hasTabs ||
@@ -584,7 +609,45 @@ function wrapTextToLines(text: string, maxLen: number = 20): string[] {
  * Body pages are laid out first so that the Table of Contents, List of Figures
  * and List of Tables carry page numbers taken from the real rendered document.
  */
-export function buildFinalDocument({ model, config, selection }: BuildInput): FinalDocument {
+export function buildFinalDocument(input: any): FinalDocument {
+  const selection = input.selection || input.institution || {};
+  const config = input.config || resolveConfig(selection);
+  const extracted = input.extracted;
+  let model = input.model || input.documentModel;
+
+  if ((!model || !model.chapters || model.chapters.length === 0) && extracted) {
+    // Synthesize a chapter from extracted text and images
+    model = {
+      meta: {
+        title: "DOCUMENT",
+        author: "AUTHOR",
+      },
+      chapters: [
+        {
+          title: "DOCUMENT CONTENT",
+          intro: extracted.text || "",
+          sections: [],
+          figures: (extracted.images || []).map((img: any, idx: number) => ({
+            id: `img-${idx}`,
+            caption: `Figure ${idx + 1}`,
+            kind: "figure",
+            path: img.base64 ? `data:${img.contentType || "image/png"};base64,${img.base64}` : "",
+          })),
+          tables: [],
+        },
+      ],
+      references: [],
+      appendices: [],
+      abbreviations: [],
+      images: (extracted.images || []).map((img: any, idx: number) => ({
+        id: `img-${idx}`,
+        path: img.base64 ? `data:${img.contentType || "image/png"};base64,${img.base64}` : "",
+        contentType: img.contentType || "image/png",
+        role: "figure",
+      })),
+    };
+  }
+
   const toc: (ListEntry & { level: number })[] = [];
   const listOfFigures: ListEntry[] = [];
   const listOfTables: ListEntry[] = [];
@@ -606,10 +669,13 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   };
 
   let logoImages: { id: string; path: string; contentType: string; role: "logo" }[] = [];
-  const isColtech = selection.school.toLowerCase().includes("college of technology") || selection.school.toLowerCase().includes("coltech");
-  const isFinalYearWork = ["Dissertation", "Thesis", "End of Course Project"].includes(selection.documentType);
+  const schoolStr = selection?.school || "";
+  const uniStr = selection?.university || "";
+  const docTypeStr = selection?.documentType || "";
+  const isColtech = schoolStr.toLowerCase().includes("college of technology") || schoolStr.toLowerCase().includes("coltech");
+  const isFinalYearWork = ["Dissertation", "Thesis", "End of Course Project"].includes(docTypeStr);
 
-  if (selection.university.toLowerCase().includes("bamenda") || isColtech) {
+  if (uniStr.toLowerCase().includes("bamenda") || isColtech) {
     if (isColtech) {
       logoImages = [
         {
@@ -636,11 +702,11 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       ];
     }
   } else {
-    logoImages = (model.images ?? []).filter((image) => image.role === "logo") as any;
+    logoImages = (model?.images ?? []).filter((image) => image.role === "logo") as any;
   }
 
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
-  model.chapters.forEach((chapter, chapterIndex) => {
+  (model?.chapters ?? []).forEach((chapter, chapterIndex) => {
     const chapterNumber = chapterIndex + 1;
     const chapterTitle = cleanTitle(chapter.title);
 
@@ -880,9 +946,10 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   });
 
   // ---- References (never a chapter) ----
-  if (model.references.length > 0) {
+  const refs = model?.references ?? [];
+  if (refs.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "REFERENCES" }];
-    [...model.references]
+    [...refs]
       .sort((a, b) => a.localeCompare(b))
       .forEach((reference) => blocks.push({ type: "listline", text: reference }));
     const page = pushBody("References", blocks, "back");
@@ -890,18 +957,19 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
   }
 
   // ---- Appendices (never a chapter) ----
-  if (model.appendices.length > 0) {
+  const appendicesList = model?.appendices ?? [];
+  if (appendicesList.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "APPENDICES" }];
-    model.appendices.forEach((appendix) => {
+    appendicesList.forEach((appendix) => {
       blocks.push({ type: "heading2", text: `${appendix.label}: ${cleanTitle(appendix.title)}` });
-      const appendixBlocks = parseSectionContent(appendix.content, model.images ?? []);
+      const appendixBlocks = parseSectionContent(appendix.content, model?.images ?? []);
       blocks.push(...appendixBlocks);
     });
     const page = pushBody("Appendices", blocks, "back");
     toc.push({ label: "", text: "APPENDICES", page: String(page), level: 1 });
   }
 
-  const listOfAbbreviations = model.abbreviations.map((a) => ({
+  const listOfAbbreviations = (model?.abbreviations ?? []).map((a) => ({
     label: a.abbreviation,
     text: a.meaning,
   }));
@@ -926,12 +994,12 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
     });
   };
 
-  const meta = model.meta;
-  const isUba = selection.university.toLowerCase().includes("bamenda");
+  const meta = model?.meta || {};
+  const isUba = uniStr.toLowerCase().includes("bamenda");
   const coverBlocks: Block[] = [];
 
   if (isUba && isFinalYearWork) {
-    const schoolUpper = selection.school.toUpperCase();
+    const schoolUpper = schoolStr.toUpperCase();
     const leftSchoolLines = schoolUpper.startsWith("THE ")
       ? wrapTextToLines(schoolUpper, 20)
       : wrapTextToLines("THE " + schoolUpper, 20);
@@ -1020,16 +1088,16 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
         : [
             { type: "center" as const, text: "REPUBLIC OF CAMEROON" },
             { type: "center" as const, text: "Peace – Work – Fatherland" },
-            { type: "center" as const, text: selection.university.toUpperCase() },
-            { type: "center" as const, text: selection.school.toUpperCase() },
+            { type: "center" as const, text: uniStr.toUpperCase() },
+            { type: "center" as const, text: schoolStr.toUpperCase() },
           ]),
-      { type: "center" as const, text: `DEPARTMENT OF ${(meta.department || selection.department).toUpperCase()}` },
+      { type: "center" as const, text: `DEPARTMENT OF ${(meta.department || selection?.department || "COMPUTER ENGINEERING").toUpperCase()}` },
       { type: "spacer" as const, text: "" },
-      { type: "title" as const, text: meta.title.toUpperCase() },
+      { type: "title" as const, text: (meta.title || "ASSIGNMENT").toUpperCase() },
       { type: "spacer" as const, text: "" },
       {
         type: "center" as const,
-        text: `${workLabel(selection.documentType, selection.level)} submitted in partial fulfilment of the requirements for the award of ${selection.level}`,
+        text: `${workLabel(docTypeStr, selection?.level || "")} submitted in partial fulfilment of the requirements for the award of ${selection?.level || ""}`,
       },
       { type: "spacer" as const, text: "" },
       { type: "center" as const, text: (meta.author || "AUTHOR NAME").toUpperCase() },

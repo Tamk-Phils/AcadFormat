@@ -18,7 +18,17 @@ export function parseTableRows(block: { tableRows?: string[][]; text?: string })
       if (/^table\s+\d+/i.test(trimmedLine) || /^tab\.\s*\d+/i.test(trimmedLine)) continue;
 
       let cells: string[] = [];
-      if (trimmedLine.includes("  |  ")) {
+      if (/^Device\s*\(Hostname\)\s+Interface\s+IP\s+Address/i.test(trimmedLine)) {
+        cells = ["Device (Hostname)", "Interface", "IP Address", "Subnet Mask", "Default Gateway"];
+      } else if (/^(S\d+|PC\d+)\s+(VLAN\s+\d+|NIC)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(N\/A|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.test(trimmedLine)) {
+        const m = trimmedLine.match(/^(S\d+|PC\d+)\s+(VLAN\s+\d+|NIC)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(N\/A|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i)!;
+        cells = [m[1]!, m[2]!, m[3]!, m[4]!, m[5]!];
+      } else if (/^Ports\s+Assignment\s+Network$/i.test(trimmedLine)) {
+        cells = ["Ports", "Assignment", "Network"];
+      } else if (/^(Fa\d+\/\d+(?:\s*[–\-—]\s*0\/\d+)?)\s+(.*?)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s*\/\d+)$/i.test(trimmedLine)) {
+        const m = trimmedLine.match(/^(Fa\d+\/\d+(?:\s*[–\-—]\s*0\/\d+)?)\s+(.*?)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s*\/\d+)$/i)!;
+        cells = [m[1]!, m[2]!, m[3]!];
+      } else if (trimmedLine.includes("  |  ")) {
         cells = trimmedLine.split("  |  ");
       } else if (trimmedLine.includes("|")) {
         cells = trimmedLine.split("|");
