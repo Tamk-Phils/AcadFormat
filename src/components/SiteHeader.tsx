@@ -1,19 +1,66 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
 
+const ADMIN_EMAIL = "philss7872@gmail.com";
+const ADMIN_SESSION_KEY = "acadformat_admin_authenticated";
+
 export function SiteHeader({ user }: { user?: User | null }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [currentUser, setCurrentUser] = useState<User | null>(user ?? null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  useEffect(() => {
+    async function evaluateAdmin(u: User | null) {
+      if (u) {
+        if (u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          setIsAdmin(true);
+        } else {
+          // Regular user is signed in -> remove any residual admin key
+          localStorage.removeItem(ADMIN_SESSION_KEY);
+          setIsAdmin(false);
+        }
+      } else {
+        const saved = localStorage.getItem(ADMIN_SESSION_KEY);
+        setIsAdmin(saved === "true");
+      }
+    }
+
+    if (user !== undefined) {
+      setCurrentUser(user);
+      evaluateAdmin(user);
+    } else {
+      supabase.auth.getUser().then(({ data }) => {
+        setCurrentUser(data.user);
+        evaluateAdmin(data.user);
+      });
+    }
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      const u = session?.user ?? null;
+      setCurrentUser(u);
+      evaluateAdmin(u);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [user]);
 
   async function signOut() {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    setIsAdmin(false);
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }
+
+  const effectiveUser = user !== undefined ? user : currentUser;
 
   return (
     <header className="no-print sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-md">
@@ -32,10 +79,12 @@ export function SiteHeader({ user }: { user?: User | null }) {
           <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
             <Link to="/reviews">Reviews</Link>
           </Button>
-          <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hover:text-foreground">
-            <Link to="/admin">Admin</Link>
-          </Button>
-          {user ? (
+          {isAdmin && (
+            <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm text-amber-600 dark:text-amber-400 hover:text-amber-700 font-semibold">
+              <Link to="/admin">Admin</Link>
+            </Button>
+          )}
+          {effectiveUser ? (
             <>
               <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
                 <Link to="/dashboard">My documents</Link>

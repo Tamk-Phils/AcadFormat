@@ -91,12 +91,32 @@ function AdminPage() {
   const [newRec, setNewRec] = useState("");
 
   useEffect(() => {
-    // Check local authentication state
-    const saved = localStorage.getItem(ADMIN_SESSION_KEY);
-    if (saved === "true") {
-      setIsAuthenticated(true);
-      loadDashboardData();
-    }
+    const checkAdminSession = async () => {
+      const { data } = await supabase.auth.getUser();
+      const currentUser = data?.user;
+
+      if (currentUser) {
+        if (currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          localStorage.setItem(ADMIN_SESSION_KEY, "true");
+          setIsAuthenticated(true);
+          loadDashboardData();
+        } else {
+          // Explicitly clear residual admin key if a regular non-admin user is logged in
+          localStorage.removeItem(ADMIN_SESSION_KEY);
+          setIsAuthenticated(false);
+        }
+      } else {
+        const saved = localStorage.getItem(ADMIN_SESSION_KEY);
+        if (saved === "true") {
+          setIsAuthenticated(true);
+          loadDashboardData();
+        } else {
+          setIsAuthenticated(false);
+        }
+      }
+    };
+
+    checkAdminSession();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
