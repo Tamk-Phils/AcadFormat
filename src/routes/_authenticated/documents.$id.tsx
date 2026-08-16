@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -544,145 +544,11 @@ function Workspace() {
 
             {/* Metadata Fields Form */}
             {doc.data?.model && (
-              <div className="border-t border-border pt-4 mt-4 space-y-4">
-                <h5 className="font-semibold text-sm">Cover Page & Certification Metadata</h5>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label htmlFor="meta-title" className="text-xs">Document Title</Label>
-                    <Textarea
-                      id="meta-title"
-                      className="mt-1 text-sm min-h-[40px]"
-                      value={(doc.data.model as any).meta?.title || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, title: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="Title of Dissertation / Thesis"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-author" className="text-xs">Author Name</Label>
-                    <input
-                      id="meta-author"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.author || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, author: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. JOHN DOE"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-reg" className="text-xs">Registration Number</Label>
-                    <input
-                      id="meta-reg"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.registrationNumber || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, registrationNumber: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. UB20A500"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-dept" className="text-xs">Department</Label>
-                    <input
-                      id="meta-dept"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.department || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, department: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. Computer Engineering"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-hod" className="text-xs">Head of Department (with title)</Label>
-                    <input
-                      id="meta-hod"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.headOfDepartment || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, headOfDepartment: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. Pr. Mbacham Wilfred"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-director" className="text-xs">Director / Dean (with title)</Label>
-                    <input
-                      id="meta-director"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.director || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, director: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. Pr. Fonteh Fru Mathias"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-degree" className="text-xs">Degree Awarded (Degree of Author)</Label>
-                    <input
-                      id="meta-degree"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={(doc.data.model as any).meta?.degreeOfAuthor || ""}
-                      onChange={async (e) => {
-                        const nextMeta = { ...(doc.data.model as any).meta, degreeOfAuthor: e.target.value };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. Master of Science"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="meta-supervisors" className="text-xs">Supervisors (comma separated)</Label>
-                    <input
-                      id="meta-supervisors"
-                      type="text"
-                      className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      value={
-                        Array.isArray((doc.data.model as any).meta?.supervisors)
-                          ? (doc.data.model as any).meta.supervisors.join(", ")
-                          : typeof (doc.data.model as any).meta?.supervisors === "string"
-                            ? (doc.data.model as any).meta.supervisors
-                            : ""
-                      }
-                      onChange={async (e) => {
-                        const supervisors = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
-                        const nextMeta = { ...(doc.data.model as any).meta, supervisors };
-                        const nextModel = { ...(doc.data.model as any), meta: nextMeta };
-                        await supabase.from("documents").update({ model: nextModel as any }).eq("id", id);
-                        queryClient.setQueryData(["document", id], (prev: any) => ({ ...prev, model: nextModel }));
-                      }}
-                      placeholder="e.g. Dr. John, Pr. Smith"
-                    />
-                  </div>
-                </div>
-              </div>
+              <MetadataForm
+                model={doc.data.model}
+                documentId={id}
+                queryClient={queryClient}
+              />
             )}
 
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
@@ -1046,6 +912,200 @@ function IssueRow({
         <Button size="sm" variant="ghost" onClick={() => onDecide(issue, "rejected")}>
           Reject
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function MetadataForm({
+  model,
+  documentId,
+  queryClient,
+}: {
+  model: any;
+  documentId: string;
+  queryClient: any;
+}) {
+  const meta = model?.meta || {};
+  const [formData, setFormData] = useState({
+    title: meta.title || "",
+    author: meta.author || "",
+    registrationNumber: meta.registrationNumber || "",
+    department: meta.department || "",
+    headOfDepartment: meta.headOfDepartment || "",
+    director: meta.director || "",
+    degreeOfAuthor: meta.degreeOfAuthor || "",
+    supervisors: Array.isArray(meta.supervisors)
+      ? meta.supervisors.join(", ")
+      : typeof meta.supervisors === "string"
+      ? meta.supervisors
+      : "",
+  });
+
+  useEffect(() => {
+    const currentMeta = model?.meta || {};
+    setFormData({
+      title: currentMeta.title || "",
+      author: currentMeta.author || "",
+      registrationNumber: currentMeta.registrationNumber || "",
+      department: currentMeta.department || "",
+      headOfDepartment: currentMeta.headOfDepartment || "",
+      director: currentMeta.director || "",
+      degreeOfAuthor: currentMeta.degreeOfAuthor || "",
+      supervisors: Array.isArray(currentMeta.supervisors)
+        ? currentMeta.supervisors.join(", ")
+        : typeof currentMeta.supervisors === "string"
+        ? currentMeta.supervisors
+        : "",
+    });
+  }, [model?.meta]);
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistChanges = useCallback(
+    async (latestData: typeof formData) => {
+      const supervisorsArr = latestData.supervisors
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+
+      const nextMeta = {
+        ...model?.meta,
+        title: latestData.title,
+        author: latestData.author,
+        registrationNumber: latestData.registrationNumber,
+        department: latestData.department,
+        headOfDepartment: latestData.headOfDepartment,
+        director: latestData.director,
+        degreeOfAuthor: latestData.degreeOfAuthor,
+        supervisors: supervisorsArr,
+      };
+      const nextModel = { ...model, meta: nextMeta };
+
+      queryClient.setQueryData(["document", documentId], (prev: any) => {
+        if (!prev) return prev;
+        return { ...prev, model: nextModel };
+      });
+
+      await supabase.from("documents").update({ model: nextModel as any }).eq("id", documentId);
+    },
+    [model, documentId, queryClient]
+  );
+
+  const handleChange = (field: keyof typeof formData, value: string) => {
+    const nextData = { ...formData, [field]: value };
+    setFormData(nextData);
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      persistChanges(nextData);
+    }, 400);
+  };
+
+  const handleBlur = () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    persistChanges(formData);
+  };
+
+  return (
+    <div className="border-t border-border pt-4 mt-4 space-y-4">
+      <h5 className="font-semibold text-sm">Cover Page &amp; Certification Metadata</h5>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label htmlFor="meta-title" className="text-xs">Document Title</Label>
+          <Textarea
+            id="meta-title"
+            className="mt-1 text-sm min-h-[40px]"
+            value={formData.title}
+            onChange={(e) => handleChange("title", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="Title of Dissertation / Thesis"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-author" className="text-xs">Author Name</Label>
+          <input
+            id="meta-author"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.author}
+            onChange={(e) => handleChange("author", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. JOHN DOE"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-reg" className="text-xs">Registration Number</Label>
+          <input
+            id="meta-reg"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.registrationNumber}
+            onChange={(e) => handleChange("registrationNumber", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. UB20A500"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-dept" className="text-xs">Department</Label>
+          <input
+            id="meta-dept"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.department}
+            onChange={(e) => handleChange("department", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. Computer Engineering"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-hod" className="text-xs">Head of Department (with title)</Label>
+          <input
+            id="meta-hod"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.headOfDepartment}
+            onChange={(e) => handleChange("headOfDepartment", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. Pr. Mbacham Wilfred"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-director" className="text-xs">Director / Dean (with title)</Label>
+          <input
+            id="meta-director"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.director}
+            onChange={(e) => handleChange("director", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. Pr. Fonteh Fru Mathias"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-degree" className="text-xs">Degree Awarded (Degree of Author)</Label>
+          <input
+            id="meta-degree"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.degreeOfAuthor}
+            onChange={(e) => handleChange("degreeOfAuthor", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. Master of Science"
+          />
+        </div>
+        <div>
+          <Label htmlFor="meta-supervisors" className="text-xs">Supervisors (comma separated)</Label>
+          <input
+            id="meta-supervisors"
+            type="text"
+            className="mt-1 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={formData.supervisors}
+            onChange={(e) => handleChange("supervisors", e.target.value)}
+            onBlur={handleBlur}
+            placeholder="e.g. Dr. John, Pr. Smith"
+          />
+        </div>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import type {
 } from "./document-model";
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
 import { workLabel } from "./institutions";
+import { parseTableRows } from "./utils";
 
 /** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
 const CHARS_PER_PAGE = 2900;
