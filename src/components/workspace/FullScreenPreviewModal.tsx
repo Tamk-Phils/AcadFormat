@@ -49,19 +49,22 @@ export function FullScreenPreviewModal({
   const [localChatMessage, setLocalChatMessage] = useState<string>("");
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const totalPages = final?.pages?.length ?? 1;
+
+  // Scroll chat history to bottom when new messages arrive
+  useEffect(() => {
+    if (chatOpen && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatHistory, chatOpen, busy]);
 
   // Prevent background scrolling when open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
       setCurrentPage(1);
-      // Automatically fit viewport on mobile screens
-      if (window.innerWidth < 640) {
-        setZoomLevel(100);
-      } else {
-        setZoomLevel(100);
-      }
+      setZoomLevel(100);
     } else {
       document.body.style.overflow = "auto";
     }
@@ -116,6 +119,8 @@ export function FullScreenPreviewModal({
 
   if (!isOpen) return null;
 
+  const activePageLabel = final?.pages?.[currentPage - 1]?.numberLabel;
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 text-white animate-in fade-in duration-200 overflow-hidden">
       {/* 1. TOP NAVBAR — FIXED ABOVE DOCUMENT (NO OVERLAP) */}
@@ -147,8 +152,8 @@ export function FullScreenPreviewModal({
             <ChevronLeft className="h-4 w-4" />
           </Button>
 
-          <span className="text-xs font-mono px-2 text-slate-200 min-w-[65px] text-center">
-            {currentPage} / {totalPages}
+          <span className="text-xs font-mono px-2 text-slate-200 min-w-[85px] text-center">
+            {currentPage} / {totalPages} {activePageLabel ? `(p. ${activePageLabel})` : ""}
           </span>
 
           <Button
@@ -222,7 +227,7 @@ export function FullScreenPreviewModal({
         </div>
       </header>
 
-      {/* 2. BODY WORKSPACE — SCROLLABLE PAGE CONTAINER (FITS SCREEN FITLY) */}
+      {/* 2. BODY WORKSPACE — SCROLLABLE PAGE CONTAINER */}
       <div className="relative flex-1 flex overflow-hidden">
         <div
           ref={containerRef}
@@ -243,7 +248,9 @@ export function FullScreenPreviewModal({
               >
                 {/* Page Banner */}
                 <div className="w-full mb-1.5 flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
-                  <span>Page {pIdx + 1} of {totalPages}</span>
+                  <span>
+                    Page {pIdx + 1} of {totalPages} {page.numberLabel ? `(Formal Page ${page.numberLabel})` : ""}
+                  </span>
                   <span className="opacity-70">{config.label}</span>
                 </div>
 
@@ -271,10 +278,10 @@ export function FullScreenPreviewModal({
           </div>
         </div>
 
-        {/* 3. AI LIVE EDIT DRAWER (RIGHT PANEL IN FULLSCREEN) */}
+        {/* 3. AI LIVE EDIT DRAWER — RESPONSIVE MOBILE SHEET + DESKTOP SIDE PANEL */}
         {chatOpen && onChatEdit && (
-          <div className="w-full sm:w-80 md:w-96 border-l border-slate-800 bg-slate-900/95 p-4 flex flex-col justify-between shadow-2xl z-40 animate-in slide-in-from-right duration-200">
-            <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
+          <div className="fixed inset-x-0 bottom-0 sm:relative sm:inset-auto h-[60vh] sm:h-auto sm:w-80 md:w-96 border-t sm:border-t-0 sm:border-l border-slate-800 bg-slate-900/98 p-3 sm:p-4 flex flex-col justify-between shadow-2xl z-50 sm:z-40 animate-in slide-in-from-bottom sm:slide-in-from-right duration-200">
+            <div className="border-b border-slate-800 pb-2.5 flex items-center justify-between shrink-0">
               <h4 className="font-semibold text-xs text-white flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-amber-400" />
                 Live Academic AI Editor
@@ -287,10 +294,10 @@ export function FullScreenPreviewModal({
               </button>
             </div>
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto my-3 space-y-3 pr-1 text-xs scrollbar-thin flex flex-col">
+            {/* Chat Messages Container */}
+            <div className="flex-1 overflow-y-auto my-2 space-y-3 pr-1 text-xs scrollbar-thin flex flex-col">
               {chatHistory.length === 0 ? (
-                <div className="text-center text-slate-400 my-auto py-6 px-2 space-y-2">
+                <div className="text-center text-slate-400 my-auto py-4 px-2 space-y-2">
                   <p className="font-medium text-slate-200">Live Document Edits</p>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     Highlight any text on the page or type instructions to modify content in real-time.
@@ -327,18 +334,19 @@ export function FullScreenPreviewModal({
                   Applying live edits to document structure...
                 </div>
               )}
+              <div ref={chatEndRef} />
             </div>
 
-            {/* Selected Text helper */}
+            {/* Selected Text Context */}
             {selectedText && (
-              <div className="bg-slate-800/80 border border-slate-700 p-2 rounded-lg text-[11px] mb-3">
+              <div className="bg-slate-800/80 border border-slate-700 p-2 rounded-lg text-[11px] mb-2 shrink-0">
                 <span className="text-amber-400 font-semibold block mb-0.5">Selected Context:</span>
                 <p className="italic text-slate-300 line-clamp-2">"{selectedText}"</p>
               </div>
             )}
 
-            {/* Chat Form */}
-            <form onSubmit={handleSendLiveEdit} className="space-y-2">
+            {/* Sticky Chat Input Form */}
+            <form onSubmit={handleSendLiveEdit} className="space-y-2 shrink-0 pt-1 bg-slate-900 border-t border-slate-800">
               <Textarea
                 placeholder="Type live edit instruction..."
                 value={localChatMessage}
@@ -363,19 +371,22 @@ export function FullScreenPreviewModal({
       {/* 4. FOOTER PAGE THUMBNAILS BAR */}
       {totalPages > 1 && (
         <footer className="sticky bottom-0 z-30 border-t border-slate-800 bg-slate-900 py-1.5 px-3 flex items-center justify-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
-            <button
-              key={num}
-              onClick={() => scrollToPage(num)}
-              className={`h-6 min-w-[28px] px-1.5 rounded text-[11px] font-mono transition-all ${
-                currentPage === num
-                  ? "bg-primary text-primary-foreground font-bold shadow-xs"
-                  : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
-              }`}
-            >
-              p.{num}
-            </button>
-          ))}
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => {
+            const pageNumLabel = final.pages[num - 1]?.numberLabel;
+            return (
+              <button
+                key={num}
+                onClick={() => scrollToPage(num)}
+                className={`h-6 min-w-[32px] px-1.5 rounded text-[11px] font-mono transition-all ${
+                  currentPage === num
+                    ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                    : "bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                }`}
+              >
+                {pageNumLabel ? `p.${pageNumLabel}` : `p.${num}`}
+              </button>
+            );
+          })}
         </footer>
       )}
     </div>

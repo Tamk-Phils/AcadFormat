@@ -100,13 +100,13 @@ export async function buildPdf(
   let isFirstPage = true;
 
   for (const page of final.pages) {
-    if (page.startsSection && !isFirstPage) {
+    if (!isFirstPage) {
       stamp(sheet, currentLabel);
       sheet = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       y = PAGE_HEIGHT - margin.top;
     }
     isFirstPage = false;
-    currentLabel = page.numberLabel || currentLabel;
+    currentLabel = page.numberLabel || "";
 
     if (page.hasPageBorder) {
       sheet.drawRectangle({
