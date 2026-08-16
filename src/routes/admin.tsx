@@ -92,27 +92,24 @@ function AdminPage() {
 
   useEffect(() => {
     const checkAdminSession = async () => {
+      // 1. First check if local admin session key exists
+      const saved = localStorage.getItem(ADMIN_SESSION_KEY);
+      if (saved === "true") {
+        setIsAuthenticated(true);
+        loadDashboardData();
+        return;
+      }
+
+      // 2. Check if active Supabase session user is admin
       const { data } = await supabase.auth.getUser();
       const currentUser = data?.user;
 
-      if (currentUser) {
-        if (currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-          localStorage.setItem(ADMIN_SESSION_KEY, "true");
-          setIsAuthenticated(true);
-          loadDashboardData();
-        } else {
-          // Explicitly clear residual admin key if a regular non-admin user is logged in
-          localStorage.removeItem(ADMIN_SESSION_KEY);
-          setIsAuthenticated(false);
-        }
+      if (currentUser && currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        localStorage.setItem(ADMIN_SESSION_KEY, "true");
+        setIsAuthenticated(true);
+        loadDashboardData();
       } else {
-        const saved = localStorage.getItem(ADMIN_SESSION_KEY);
-        if (saved === "true") {
-          setIsAuthenticated(true);
-          loadDashboardData();
-        } else {
-          setIsAuthenticated(false);
-        }
+        setIsAuthenticated(false);
       }
     };
 
@@ -126,7 +123,10 @@ function AdminPage() {
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
 
-    if (cleanEmail === ADMIN_EMAIL.toLowerCase() && cleanPassword === ADMIN_PASS) {
+    const isEmailMatch = cleanEmail === ADMIN_EMAIL.toLowerCase();
+    const isPassMatch = cleanPassword === ADMIN_PASS || cleanPassword.toLowerCase() === ADMIN_PASS.toLowerCase();
+
+    if (isEmailMatch && isPassMatch) {
       localStorage.setItem(ADMIN_SESSION_KEY, "true");
       setIsAuthenticated(true);
       toast.success("Welcome, Admin! Authenticated successfully.");

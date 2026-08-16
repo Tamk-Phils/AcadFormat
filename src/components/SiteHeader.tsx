@@ -16,17 +16,13 @@ export function SiteHeader({ user }: { user?: User | null }) {
 
   useEffect(() => {
     async function evaluateAdmin(u: User | null) {
-      if (u) {
-        if (u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-          setIsAdmin(true);
-        } else {
-          // Regular user is signed in -> remove any residual admin key
-          localStorage.removeItem(ADMIN_SESSION_KEY);
-          setIsAdmin(false);
-        }
+      const saved = localStorage.getItem(ADMIN_SESSION_KEY) === "true";
+      if (saved) {
+        setIsAdmin(true);
+      } else if (u && u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        setIsAdmin(true);
       } else {
-        const saved = localStorage.getItem(ADMIN_SESSION_KEY);
-        setIsAdmin(saved === "true");
+        setIsAdmin(false);
       }
     }
 
