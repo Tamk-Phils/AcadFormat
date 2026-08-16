@@ -394,63 +394,75 @@ export async function buildPdf(
         const rows = parseTableRows(block);
 
         if (rows.length > 0) {
-          const colsCount = Math.max(...rows.map((r) => r.length));
+          const colsCount = Math.max(1, ...rows.map((r) => r.length));
           const colWidth = contentWidth / colsCount;
-          const tableTopY = y;
-
-          ensure(6);
-          sheet.drawLine({
-            start: { x: margin.left, y },
-            end: { x: margin.left + contentWidth, y },
-            thickness: 1,
-            color: rgb(0, 0, 0),
-          });
-          y -= 4;
+          const cellFontSize = Math.max(7.5, colsCount >= 4 ? baseSize - 3.5 : baseSize - 2);
+          const cellLeading = cellFontSize * 1.3;
 
           for (let rIdx = 0; rIdx < rows.length; rIdx += 1) {
             const row = rows[rIdx]!;
             const rowFont = rIdx === 0 ? bold : regular;
 
             const wrappedCells = row.map((cell) =>
-              wrap(sanitize(cell), rowFont, baseSize, colWidth - 10),
+              wrap(sanitize(cell), rowFont, cellFontSize, colWidth - 8),
             );
-            const maxLines = Math.max(...wrappedCells.map((lines) => lines.length));
-            const rowHeight = maxLines * leading + 8;
+            const maxLines = Math.max(1, ...wrappedCells.map((lines) => lines.length));
+            const rowHeight = maxLines * cellLeading + 8;
 
             ensure(rowHeight);
+            const rowTopY = y;
+
+            if (rIdx === 0) {
+              sheet.drawRectangle({
+                x: margin.left,
+                y: rowTopY - rowHeight,
+                width: contentWidth,
+                height: rowHeight,
+                color: rgb(0.92, 0.94, 0.96),
+              });
+            }
+
+            // Draw top border line of this row
+            sheet.drawLine({
+              start: { x: margin.left, y: rowTopY },
+              end: { x: margin.left + contentWidth, y: rowTopY },
+              thickness: rIdx === 0 ? 1.2 : 0.75,
+              color: rgb(0, 0, 0),
+            });
 
             for (let cIdx = 0; cIdx < row.length; cIdx += 1) {
               const cellLines = wrappedCells[cIdx]!;
-              let cellY = y - 4;
+              let cellY = rowTopY - 4;
               for (const line of cellLines) {
                 sheet.drawText(line, {
-                  x: margin.left + cIdx * colWidth + 5,
-                  y: cellY - baseSize,
-                  size: baseSize,
+                  x: margin.left + cIdx * colWidth + 4,
+                  y: cellY - cellFontSize,
+                  size: cellFontSize,
                   font: rowFont,
                 });
-                cellY -= leading;
+                cellY -= cellLeading;
               }
             }
 
             y -= rowHeight;
 
+            // Draw bottom border line of this row
             sheet.drawLine({
               start: { x: margin.left, y },
               end: { x: margin.left + contentWidth, y },
-              thickness: 1,
+              thickness: rIdx === rows.length - 1 ? 1.2 : 0.75,
               color: rgb(0, 0, 0),
             });
-          }
 
-          // Draw vertical border lines
-          for (let cIdx = 0; cIdx <= colsCount; cIdx += 1) {
-            sheet.drawLine({
-              start: { x: margin.left + cIdx * colWidth, y: tableTopY },
-              end: { x: margin.left + cIdx * colWidth, y },
-              thickness: 1,
-              color: rgb(0, 0, 0),
-            });
+            // Draw per-row vertical column grid lines
+            for (let cIdx = 0; cIdx <= colsCount; cIdx += 1) {
+              sheet.drawLine({
+                start: { x: margin.left + cIdx * colWidth, y: rowTopY },
+                end: { x: margin.left + cIdx * colWidth, y },
+                thickness: 0.75,
+                color: rgb(0, 0, 0),
+              });
+            }
           }
         }
         y -= 12;
