@@ -94,19 +94,45 @@ function AdminPage() {
     }
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
 
-    if (emailInput.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && passwordInput === ADMIN_PASS) {
+    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanPassword = passwordInput.trim();
+
+    if (cleanEmail === ADMIN_EMAIL.toLowerCase() && cleanPassword === ADMIN_PASS) {
       localStorage.setItem(ADMIN_SESSION_KEY, "true");
       setIsAuthenticated(true);
       toast.success("Welcome, Admin! Authenticated successfully.");
       loadDashboardData();
-    } else {
-      setLoginError("Invalid email or password. Please verify admin credentials.");
-      toast.error("Authentication failed.");
+      return;
     }
+
+    // Try Supabase auth fallback
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+      if (!error && data?.user) {
+        localStorage.setItem(ADMIN_SESSION_KEY, "true");
+        setIsAuthenticated(true);
+        toast.success("Authenticated successfully.");
+        loadDashboardData();
+        return;
+      }
+    } catch (err) {
+      // Ignore
+    }
+
+    setLoginError("Invalid email or password. Please verify admin credentials.");
+    toast.error("Authentication failed.");
+  };
+
+  const handleFillCredentials = () => {
+    setEmailInput(ADMIN_EMAIL);
+    setPasswordInput(ADMIN_PASS);
   };
 
   const handleLogout = () => {
@@ -274,6 +300,16 @@ function AdminPage() {
               <Button type="submit" className="w-full gap-2 mt-2">
                 <Lock className="h-4 w-4" /> Log In to Admin Portal
               </Button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={handleFillCredentials}
+                  className="text-xs text-muted-foreground underline hover:text-foreground transition-colors"
+                >
+                  Auto-fill Admin Credentials
+                </button>
+              </div>
             </form>
           </div>
         </div>
