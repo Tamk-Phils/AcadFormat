@@ -17,7 +17,7 @@ const toJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as never;
 
 export const analyzeDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string }) => data)
+  .validator((data: { documentId: string }) => data)
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: row, error } = await supabase
@@ -42,9 +42,9 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       if (extracted.text.trim().length < 200)
         throw new Error("No readable text was found in this file. If it is a scanned PDF, upload the DOCX instead.");
 
-      // Persist embedded images (logos, figures) concurrently so they survive rebuild without slowing down analysis.
+      // Run image uploading and AI analysis concurrently for maximum speed
       const firstChapterAt = extracted.text.search(/chapter\s*(1|one|i\b)/i);
-      const uploadResults = await Promise.all(
+      const uploadImagesTask = Promise.all(
         extracted.images.map(async (image) => {
           const marker = extracted.text.indexOf(`[IMAGE:${image.index}]`);
           const isLogo =
@@ -75,17 +75,19 @@ export const analyzeDocument = createServerFn({ method: "POST" })
           } as DocumentImage;
         })
       );
-      const uploadedImages: DocumentImage[] = uploadResults.filter(
-        (img): img is DocumentImage => img !== null
-      );
 
-      const analysis = await analyzeWithAI({
+      const aiTask = analyzeWithAI({
         text: extracted.text,
         fileName: row.file_name,
         imageCount: extracted.imageCount,
         tableCount: extracted.tableCount,
         institutionHint: "Institution not yet selected — analyse structure generically.",
       });
+
+      const [uploadResults, analysis] = await Promise.all([uploadImagesTask, aiTask]);
+      const uploadedImages: DocumentImage[] = uploadResults.filter(
+        (img): img is DocumentImage => img !== null
+      );
 
       await supabase.from("document_issues").delete().eq("document_id", row.id);
       if (analysis.issues.length > 0) {
@@ -132,7 +134,7 @@ export const analyzeDocument = createServerFn({ method: "POST" })
 
 export const formatDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string; selection: InstitutionSelection }) => data)
+  .validator((data: { documentId: string; selection: InstitutionSelection }) => data)
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const { data: row, error } = await supabase
@@ -168,7 +170,7 @@ export const formatDocument = createServerFn({ method: "POST" })
 
 export const exportDocx = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string }) => data)
+  .validator((data: { documentId: string }) => data)
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
@@ -227,7 +229,7 @@ export const exportDocx = createServerFn({ method: "POST" })
 
 export const exportPdf = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string }) => data)
+  .validator((data: { documentId: string }) => data)
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
@@ -281,7 +283,7 @@ export const exportPdf = createServerFn({ method: "POST" })
 /** Signed URLs for the images of the uploaded (pre-formatting) document. */
 export const getOriginalDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string }) => data)
+  .validator((data: { documentId: string }) => data)
   .handler(async ({ data, context }) => {
     const { data: row } = await context.supabase
       .from("documents")
@@ -306,7 +308,7 @@ export const getOriginalDocument = createServerFn({ method: "POST" })
 
 export const getAssetUrls = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { documentId: string }) => data)
+  .validator((data: { documentId: string }) => data)
   .handler(async ({ data, context }) => {
     const { data: row } = await context.supabase
       .from("documents")
@@ -386,7 +388,7 @@ function matches(target: string, ...candidates: (string | undefined)[]) {
 
 export const chatEditDocumentFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (data: {
       documentId: string;
       message: string;

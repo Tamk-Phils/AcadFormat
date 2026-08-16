@@ -2,7 +2,7 @@ import type { AnalysisResult, DocumentModel } from "./document-model";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
-const MAX_CHARS = 24_000;
+const MAX_CHARS = 16_000;
 
 const SYSTEM_PROMPT = `You are the academic document understanding and validation engine behind AcadFormat.
 You analyse a COMPLETE academic work as one document, never page by page.
@@ -213,6 +213,89 @@ function fallbackRuleBasedAnalysis(input: {
   const lines = input.text.split("\n").map((l) => l.trim()).filter(Boolean);
   const title = lines[0] || input.fileName.replace(/\.[^/.]+$/, "");
 
+  // Match chapter headings in text
+  const chapterHeaderRegex = /^(?:CHAPTER\s+(?:[IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b[:.\-–—]?\s*(.*))/i;
+
+  const rawChapters: { title: string; text: string }[] = [];
+  let currentTitle = "Introduction";
+  let currentLines: string[] = [];
+
+  for (const line of lines) {
+    const match = line.match(chapterHeaderRegex);
+    if (match) {
+      if (currentLines.length > 0) {
+        rawChapters.push({ title: currentTitle, text: currentLines.join("\n") });
+        currentLines = [];
+      }
+      currentTitle = match[1]?.trim() || line;
+    } else {
+      currentLines.push(line);
+    }
+  }
+  if (currentLines.length > 0) {
+    rawChapters.push({ title: currentTitle, text: currentLines.join("\n") });
+  }
+
+  if (rawChapters.length === 0) {
+    rawChapters.push({ title: "Main Content", text: input.text });
+  }
+
+  const totalChaps = rawChapters.length;
+  const figsPerChap = Math.ceil(input.imageCount / totalChaps);
+  const tablesPerChap = Math.ceil(input.tableCount / totalChaps);
+
+  let figCounter = 0;
+  let tableCounter = 0;
+
+  const chapters = rawChapters.map((chap, idx) => {
+    const chapNum = idx + 1;
+    const chapLines = chap.text.split("\n").map((l) => l.trim()).filter(Boolean);
+    const numFigs = Math.min(figsPerChap, input.imageCount - figCounter);
+    const numTables = Math.min(tablesPerChap, input.tableCount - tableCounter);
+
+    const chapFigs = Array.from({ length: Math.max(0, numFigs) }, () => {
+      const idxInDoc = figCounter++;
+      return {
+        id: `c${chapNum}f${idxInDoc + 1}`,
+        chapter: chapNum,
+        caption: `Figure ${chapNum}.${idxInDoc + 1}`,
+        originalLabel: `[IMAGE:${idxInDoc}]`,
+        kind: "figure",
+        requiresUserReview: false,
+        confidence: 90,
+      };
+    });
+
+    const chapTables = Array.from({ length: Math.max(0, numTables) }, () => {
+      const idxInDoc = tableCounter++;
+      return {
+        id: `c${chapNum}t${idxInDoc + 1}`,
+        chapter: chapNum,
+        title: `Table ${chapNum}.${idxInDoc + 1}`,
+        originalLabel: `Table ${chapNum}.${idxInDoc + 1}`,
+        requiresUserReview: false,
+        confidence: 90,
+      };
+    });
+
+    return {
+      number: chapNum,
+      title: chap.title || `Chapter ${chapNum}`,
+      type: chapNum === 1 ? "INTRODUCTION" : chapNum === 2 ? "LITERATURE_REVIEW" : chapNum === 3 ? "METHODOLOGY" : chapNum === 4 ? "RESULTS" : "CONCLUSION",
+      intro: "",
+      sections: [
+        {
+          title: chap.title || "Body",
+          content: chap.text,
+          startMarker: chapLines.slice(0, 3).join(" "),
+          endMarker: chapLines.slice(-3).join(" "),
+        },
+      ],
+      figures: chapFigs,
+      tables: chapTables,
+    };
+  });
+
   return normalize({
     understanding: {
       topic: title,
@@ -235,39 +318,7 @@ function fallbackRuleBasedAnalysis(input: {
         keywords: [],
       },
       preliminary: [{ type: "ABSTRACT", title: "Abstract", content: "", present: true }],
-      chapters: [
-        {
-          number: 1,
-          title: "Main Content",
-          type: "INTRODUCTION",
-          intro: "",
-          sections: [
-            {
-              title: "Body",
-              content: input.text,
-              startMarker: lines.slice(0, 3).join(" "),
-              endMarker: lines.slice(-3).join(" "),
-            },
-          ],
-          figures: Array.from({ length: input.imageCount }, (_, i) => ({
-            id: `f${i + 1}`,
-            chapter: 1,
-            caption: `Figure ${i + 1}`,
-            originalLabel: `[IMAGE:${i}]`,
-            kind: "figure",
-            requiresUserReview: false,
-            confidence: 90,
-          })),
-          tables: Array.from({ length: input.tableCount }, (_, i) => ({
-            id: `t${i + 1}`,
-            chapter: 1,
-            title: `Table ${i + 1}`,
-            originalLabel: `Table ${i + 1}`,
-            requiresUserReview: false,
-            confidence: 90,
-          })),
-        },
-      ],
+      chapters,
       references: [],
       appendices: [],
       abbreviations: [],
@@ -345,6 +396,7 @@ ${input.text.slice(0, MAX_CHARS)}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(6000),
       });
 
       if (response.status === 429) {
@@ -541,6 +593,7 @@ ${input.selectedText || "(None)"}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(12000),
       });
 
       if (response.status === 429) {
