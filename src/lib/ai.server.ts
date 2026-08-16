@@ -359,8 +359,8 @@ export async function analyzeWithAI(input: {
     providersToTry.push(envProvider);
   }
 
-  // 3. Fallback list in order of speed and reliability (gemini -> groq -> deepseek -> lovable -> custom -> openrouter)
-  const defaultOrder: AIProvider[] = ["gemini", "groq", "deepseek", "lovable", "custom", "openrouter"];
+  // 3. Fallback list in order of speed and reliability (gemini -> groq -> deepseek -> custom -> lovable -> openrouter)
+  const defaultOrder: AIProvider[] = ["gemini", "groq", "deepseek", "custom", "lovable", "openrouter"];
   for (const p of defaultOrder) {
     if (hasKey(p) && !providersToTry.includes(p)) {
       providersToTry.push(p);
@@ -396,7 +396,7 @@ ${input.text.slice(0, MAX_CHARS)}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(30000),
       });
 
       if (response.status === 429) {
@@ -540,7 +540,7 @@ export async function chatEditDocument(input: ChatEditInput): Promise<ChatEditRe
   if (envProvider && hasKey(envProvider) && !providersToTry.includes(envProvider)) {
     providersToTry.push(envProvider);
   }
-  const defaultOrder: AIProvider[] = ["custom", "groq", "gemini", "deepseek", "openrouter", "lovable"];
+  const defaultOrder: AIProvider[] = ["gemini", "groq", "deepseek", "custom", "lovable", "openrouter"];
   for (const p of defaultOrder) {
     if (hasKey(p) && !providersToTry.includes(p)) {
       providersToTry.push(p);
@@ -593,7 +593,7 @@ ${input.selectedText || "(None)"}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(45000),
       });
 
       if (response.status === 429) {

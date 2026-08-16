@@ -1322,13 +1322,13 @@ export function buildFinalDocument(input: any): FinalDocument {
   const startIndex = startNumberingFrom ? prelimSectionStarts.get(startNumberingFrom) : undefined;
 
   prelimPages.forEach((page, i) => {
-    romanCounter += 1;
     const isUnnumbered = page.sectionTitle === "Cover Page" || page.sectionTitle === "Title Page";
     const isBeforeStart = startNumberingFrom && startIndex !== undefined && i < startIndex;
 
     if (isUnnumbered || isBeforeStart) {
       page.numberLabel = "";
     } else {
+      romanCounter += 1;
       page.numberLabel = config.preliminaryNumbering === "roman-lower" ? roman(romanCounter) : "";
     }
   });
