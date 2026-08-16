@@ -455,6 +455,7 @@ Make sure to follow these instructions:
 - You can add new sections to a chapter, delete sections, or update section contents.
 - You can edit the meta information (title, author, department, keywords).
 - Do not lose other fields or structures in the DocumentModel JSON.
+- If the user asks to format, restore, or put text into a table, construct a valid Markdown table (using "| Col 1 | Col 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |"), insert it into the target section's content, and add an entry with title and id to that chapter's "tables" list.
 - If you can't find the exact selected text, do your best to locate and edit the closest match.
 - Return a JSON object with two fields:
   1. "model": The modified DocumentModel JSON object.

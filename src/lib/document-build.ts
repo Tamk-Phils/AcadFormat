@@ -649,6 +649,26 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
             text: table.title,
           });
         } else {
+          const autoTitle = block.text && !block.text.includes("|") ? block.text.trim() : "Summary Table";
+          const label =
+            config.tableNumbering === "chapter"
+              ? `Table ${chapterNumber}.${tableMarks.length + 1}`
+              : `Table ${listOfTables.length + tableMarks.length + 1}`;
+
+          // Deduplicate if preceding block is a duplicate caption
+          if (blocks.length > 0) {
+            const lastBlock = blocks[blocks.length - 1];
+            if (
+              lastBlock &&
+              (lastBlock.type === "caption" || lastBlock.type === "para" || lastBlock.type === "center") &&
+              /^table\s+\d+/i.test(lastBlock.text.trim())
+            ) {
+              blocks.pop();
+            }
+          }
+
+          tableMarks.push({ label, title: autoTitle, blockIndex: blocks.length });
+          blocks.push({ type: "caption", text: `${label}: ${autoTitle}` });
           blocks.push(block);
         }
       } else {
