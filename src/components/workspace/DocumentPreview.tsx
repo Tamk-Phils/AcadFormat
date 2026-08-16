@@ -226,6 +226,16 @@ export function DocumentPreview({
                   </div>
                 );
               }
+              if (block.type === "code") {
+                return (
+                  <div
+                    key={index}
+                    className="my-3 p-3.5 bg-slate-900 text-slate-100 rounded-md font-mono text-xs overflow-x-auto leading-relaxed border border-slate-700 shadow-inner"
+                  >
+                    <pre className="whitespace-pre-wrap font-mono m-0 p-0 text-[11px] font-medium tracking-normal text-slate-100">{block.text}</pre>
+                  </div>
+                );
+              }
               return (
                 <p key={index} className="doc-para">
                   {block.text}

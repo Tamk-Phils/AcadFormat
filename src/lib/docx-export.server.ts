@@ -441,6 +441,25 @@ function renderPage(
         }
         break;
       }
+      case "code": {
+        const codeLines = (block.text || "").split("\n");
+        codeLines.forEach((codeLine) => {
+          elements.push(
+            new Paragraph({
+              spacing: { before: 30, after: 30, line: 240 },
+              indent: { left: 360 },
+              children: [
+                new TextRun({
+                  font: "Courier New",
+                  size: size - 4,
+                  text: codeLine || " ",
+                }),
+              ],
+            })
+          );
+        });
+        break;
+      }
       default:
         elements.push(
           new Paragraph({

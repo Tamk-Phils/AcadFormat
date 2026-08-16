@@ -152,7 +152,8 @@ export type BlockType =
   | "spacer"
   | "table"
   | "bilingual"
-  | "ubaHeader";
+  | "ubaHeader"
+  | "code";
 
 export interface Block {
   type: BlockType;

@@ -48,6 +48,7 @@ export async function buildPdf(
   const regular = await pdf.embedFont(StandardFonts.TimesRoman);
   const bold = await pdf.embedFont(StandardFonts.TimesRomanBold);
   const italic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+  const mono = await pdf.embedFont(StandardFonts.Courier);
 
   const embedded = new Map<string, PDFImage>();
   for (const [id, asset] of images) {
@@ -453,6 +454,35 @@ export async function buildPdf(
           }
         }
         y -= 12;
+      } else if (block.type === "code") {
+        const codeLines = sanitize(block.text || "").split("\n");
+        const fontSize = Math.max(8, baseSize - 2);
+        const codeLeading = fontSize * 1.3;
+        const blockHeight = codeLines.length * codeLeading + 10;
+
+        ensure(blockHeight);
+        sheet.drawRectangle({
+          x: margin.left,
+          y: y - blockHeight,
+          width: contentWidth,
+          height: blockHeight,
+          color: rgb(0.95, 0.95, 0.97),
+          borderColor: rgb(0.8, 0.8, 0.85),
+          borderWidth: 0.5,
+        });
+
+        let codeY = y - 6;
+        for (const line of codeLines) {
+          sheet.drawText(line, {
+            x: margin.left + 8,
+            y: codeY - fontSize,
+            size: fontSize,
+            font: mono,
+            color: rgb(0.1, 0.1, 0.2),
+          });
+          codeY -= codeLeading;
+        }
+        y -= blockHeight + 8;
       } else write(block.text, { font: regular, size: baseSize, align: "justify" });
     }
   }

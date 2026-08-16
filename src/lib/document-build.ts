@@ -78,10 +78,72 @@ export function cleanTitle(raw: string): string {
   return title || (raw || "").trim();
 }
 
+export function isHeaderFooterNoise(line: string, metaTitle?: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // Match page numbers: "Page 1", "Page 12", "1 | Page", "Page 1 of 15"
+  if (/^(?:page\s+\d+|\d+\s*\|\s*page|\d+\s+of\s+\d+|page\s+\d+\s+of\s+\d+)$/i.test(trimmed)) {
+    return true;
+  }
+
+  // Match repeated header title strings in lab guides or generic document headers
+  if (
+    /^(?:basic vlan configuration\s*[–\-—]?\s*lab guide(?:\s*ccna switching practice)?|ccna switching practice)$/i.test(trimmed)
+  ) {
+    return true;
+  }
+
+  if (metaTitle && trimmed.length > 10 && metaTitle.toLowerCase().includes(trimmed.toLowerCase()) && trimmed.length < 80) {
+    if (/^basic vlan/i.test(trimmed)) return true;
+  }
+
+  return false;
+}
+
+export function isCodeLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+
+  // Underline fill-in-the-blank line: not code
+  if (/^_{5,}$/.test(trimmed)) return false;
+
+  // Cisco CLI prompts: Switch>, Switch#, S1#, S1(config)#, S3(config-if-range)#, Router#, PC2>
+  if (/^(?:[A-Z0-9_\-]+[>#]|[A-Z0-9_\-]+\([^)]+\)[>#])/i.test(trimmed)) {
+    return true;
+  }
+
+  // Common switch CLI commands and keywords starting a line
+  if (
+    /^(?:enable|erase startup-config|copy running-config|reload|configure terminal|hostname|no ip domain-lookup|enable secret|line console|line vty|password|login|exit|end|interface|ip address|switchport|no shutdown|show interface|show vlan)\b/i.test(trimmed)
+  ) {
+    return true;
+  }
+
+  // CLI ping command with target IP or prompt
+  if (/^\s*ping\s+\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/i.test(trimmed)) {
+    return true;
+  }
+
+  // CLI output lines & headers
+  if (/^(?:port\s+mode\s+encapsulation|port\s+vlans\s+allowed|port\s+vlans\s+in\s+spanning|vlan\s+name\s+status|fa\d+\/\d+|gi\d+\/\d+)/i.test(trimmed)) {
+    return true;
+  }
+
+  if (/^(?:!{3,}|\.\!{1,}|type escape sequence to abort|sending \d+, \d+-byte|success rate is \d+ percent)/i.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
 /** A short line that is only a chapter/section heading repeated inside body text. */
 function isStrayHeading(line: string): boolean {
   const text = line.trim();
   if (text.length > 80) return false;
+  if (isHeaderFooterNoise(text)) return false;
+  if (isCodeLine(text)) return false;
+
   if (CHAPTER_PREFIX.test(text)) return true;
   // Match numbered headings (e.g. 1.1 Background)
   if (/^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text)) return true;
@@ -155,6 +217,7 @@ function paragraphs(text: string): string[] {
     .split(/\n\s*\n|\n/)
     .map((p) => p.trim())
     .filter(Boolean)
+    .filter((p) => !isHeaderFooterNoise(p))
     .filter((p) => !isStrayHeading(p));
 }
 
@@ -243,12 +306,19 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   let inTable = false;
   let tableLines: string[] = [];
   let pendingPara: string[] = [];
+  let pendingCode: string[] = [];
   let hasEmptyLine = false;
 
   const flushPara = () => {
     if (pendingPara.length === 0) return;
     blocks.push({ type: "para", text: pendingPara.join(" ") });
     pendingPara = [];
+  };
+
+  const flushCode = () => {
+    if (pendingCode.length === 0) return;
+    blocks.push({ type: "code", text: pendingCode.join("\n") });
+    pendingCode = [];
   };
 
   const flushTable = () => {
@@ -313,12 +383,19 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     if (!line) {
       hasEmptyLine = true;
       if (inTable) flushTable();
+      flushCode();
+      continue;
+    }
+
+    // Skip page headers & footers (e.g. "Page 1", "Basic VLAN Configuration - Lab Guide...")
+    if (isHeaderFooterNoise(line)) {
       continue;
     }
 
     const imageMatch = line.match(/^\[IMAGE\s*:\s*(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i) || line.match(/^\[IMAGE\s*:\s*(img-\d+)\]$/i);
     if (imageMatch) {
       flushPara();
+      flushCode();
       hasEmptyLine = false;
       if (inTable) flushTable();
       const imageIndex = imageMatch[1];
@@ -338,6 +415,26 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       continue;
     }
 
+    // Check for CLI command lines or code blocks
+    if (isCodeLine(line)) {
+      flushPara();
+      if (inTable) flushTable();
+      pendingCode.push(line);
+      hasEmptyLine = false;
+      continue;
+    } else {
+      flushCode();
+    }
+
+    // Check for fill-in-the-blank underline prompt lines
+    if (/^_{5,}$/.test(line)) {
+      flushPara();
+      if (inTable) flushTable();
+      blocks.push({ type: "para", text: line });
+      hasEmptyLine = false;
+      continue;
+    }
+
     const isCaptionLine = /^(table|tab\.)\s*\d+/i.test(line);
     const hasPipes = (line.match(/\|/g) || []).length >= 1;
     const hasTabs = line.includes("\t");
@@ -351,13 +448,14 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     };
 
     const isTableRow =
-      hasPipes ||
-      line.includes("  |  ") ||
-      (line.startsWith("|") && line.endsWith("|")) ||
-      hasTabs ||
-      isDivider ||
-      hasMultiSpace ||
-      (isCaptionLine && checkNextIsTable());
+      !isCodeLine(line) &&
+      (hasPipes ||
+        line.includes("  |  ") ||
+        (line.startsWith("|") && line.endsWith("|")) ||
+        hasTabs ||
+        isDivider ||
+        (hasMultiSpace && (checkNextIsTable() || line.split(/\s{2,}/).length >= 3)) ||
+        (isCaptionLine && checkNextIsTable()));
 
     if (isTableRow) {
       flushPara();
@@ -402,6 +500,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   }
 
   flushPara();
+  flushCode();
   if (inTable) flushTable();
   return blocks;
 }
