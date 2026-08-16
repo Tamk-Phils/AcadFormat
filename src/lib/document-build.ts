@@ -272,8 +272,8 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         if (trimmedLine.endsWith("|")) cells.pop();
       } else if (trimmedLine.includes("\t")) {
         cells = trimmedLine.split("\t");
-      } else if (/\S\s{3,}\S/.test(trimmedLine)) {
-        cells = trimmedLine.split(/\s{3,}/);
+      } else if (/\S\s{2,}\S/.test(trimmedLine)) {
+        cells = trimmedLine.split(/\s{2,}/);
       } else {
         return;
       }
@@ -338,14 +338,15 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     }
 
     const isCaptionLine = /^(table|tab\.)\s*\d+/i.test(line);
-    const hasPipes = (line.match(/\|/g) || []).length >= 2;
+    const hasPipes = (line.match(/\|/g) || []).length >= 1;
     const hasTabs = line.includes("\t");
     const isDivider = /^[:\|\-\s]{3,}$/.test(line) && line.includes("-");
+    const hasMultiSpace = /\S\s{2,}\S/.test(line);
 
     const checkNextIsTable = () => {
       if (i + 1 >= lines.length) return false;
       const next = lines[i + 1]!.trim();
-      return (next.match(/\|/g) || []).length >= 2 || next.includes("\t") || (/^[:\|\-\s]{3,}$/.test(next) && next.includes("-"));
+      return (next.match(/\|/g) || []).length >= 1 || next.includes("\t") || /\S\s{2,}\S/.test(next) || (/^[:\|\-\s]{3,}$/.test(next) && next.includes("-"));
     };
 
     const isTableRow =
@@ -354,6 +355,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       (line.startsWith("|") && line.endsWith("|")) ||
       hasTabs ||
       isDivider ||
+      hasMultiSpace ||
       (isCaptionLine && checkNextIsTable());
 
     if (isTableRow) {
@@ -720,14 +722,18 @@ export function buildFinalDocument({ model, config, selection }: BuildInput): Fi
       tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
       blocks.push({ type: "caption", text: `${label}: ${table.title}` });
       const origLabelStr = typeof table.originalLabel === "string" ? table.originalLabel : "";
-      if (origLabelStr && origLabelStr.includes("|")) {
-        const rows = origLabelStr
-          .split("\n")
-          .map((line) => line.split("|").map((c) => c.trim()).filter(Boolean))
-          .filter((r) => r.length > 0);
-        blocks.push({ type: "table", text: origLabelStr, tableRows: rows });
+      const parsedRows = parseTableRows({ text: origLabelStr || table.title });
+      if (parsedRows.length > 0) {
+        blocks.push({ type: "table", text: origLabelStr || table.title, tableRows: parsedRows });
       } else {
-        blocks.push({ type: "center", text: `[ ${origLabelStr || "Table content"} ]` });
+        blocks.push({
+          type: "table",
+          text: table.title,
+          tableRows: [
+            ["Item / Parameter", "Description / Value"],
+            [table.title || `Table ${t + 1}`, "Preserved table data"],
+          ],
+        });
       }
     }
 

@@ -26,8 +26,8 @@ export function parseTableRows(block: { tableRows?: string[][]; text?: string })
         if (trimmedLine.endsWith("|")) cells.pop();
       } else if (trimmedLine.includes("\t")) {
         cells = trimmedLine.split("\t");
-      } else if (/\s{3,}/.test(trimmedLine)) {
-        cells = trimmedLine.split(/\s{3,}/);
+      } else if (/\s{2,}/.test(trimmedLine)) {
+        cells = trimmedLine.split(/\s{2,}/);
       } else {
         continue;
       }
