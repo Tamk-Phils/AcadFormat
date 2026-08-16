@@ -24,10 +24,16 @@ export function SiteHeader({ user }: { user?: User | null }) {
         </Link>
         <nav className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm">
           <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
-            <Link to="/docs">Documentation</Link>
+            <Link to="/docs">How to Use</Link>
           </Button>
           <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
             <Link to="/institutions">Institutions</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm">
+            <Link to="/reviews">Reviews</Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="h-8 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hover:text-foreground">
+            <Link to="/admin">Admin</Link>
           </Button>
           {user ? (
             <>

@@ -6,34 +6,32 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import {
   BookOpen,
-  Cpu,
   FileCheck,
   FileDown,
   GraduationCap,
   HelpCircle,
-  Key,
   Layers,
-  Sparkles,
   CheckCircle2,
-  AlertCircle,
-  Copy,
-  Check,
+  ListOrdered,
+  FileText,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 
 export const Route = createFileRoute("/docs")({
   head: () => ({
     meta: [
-      { title: "Documentation & User Guide — AcadFormat" },
+      { title: "User Guide & How to Use — AcadFormat" },
       {
         name: "description",
         content:
-          "Learn how to use AcadFormat, configure AI models (Gemini, Groq, OpenRouter), audit academic documents, and format dissertations to verified institutional standards.",
+          "Learn how to format dissertations, project reports, and lab reports to verified institutional standards with 100% verbatim text preservation.",
       },
-      { property: "og:title", content: "AcadFormat Documentation & User Guide" },
+      { property: "og:title", content: "AcadFormat User Guide & Tutorial" },
       {
         property: "og:description",
         content:
-          "Complete documentation on document parsing, multi-provider AI setup, verbatim text preservation, and exporting.",
+          "Step-by-step guide to uploading documents, reviewing structural health scorecards, and exporting submission-ready Word and PDF files.",
       },
     ],
   }),
@@ -43,19 +41,12 @@ export const Route = createFileRoute("/docs")({
 function DocsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<
-    "getting-started" | "ai-config" | "verbatim" | "institutions" | "exporting" | "faq"
+    "getting-started" | "formatting-guide" | "verbatim" | "institutions" | "exporting" | "faq"
   >("getting-started");
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
   }, []);
-
-  const copyCode = (code: string, id: string) => {
-    navigator.clipboard.writeText(code);
-    setCopiedKey(id);
-    setTimeout(() => setCopiedKey(null), 2000);
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -64,13 +55,13 @@ function DocsPage() {
         {/* Hero Banner */}
         <div className="rounded-2xl border border-border/80 bg-gradient-to-b from-secondary/60 to-background p-8 sm:p-12 text-center shadow-xs">
           <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            <BookOpen className="h-3.5 w-3.5" /> AcadFormat Documentation
+            <BookOpen className="h-3.5 w-3.5" /> User Guide & Documentation
           </span>
           <h1 className="mt-4 font-display text-4xl font-normal tracking-tight sm:text-5xl">
             How to Use AcadFormat
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
-            Complete user guide, AI model configuration (Gemini, Groq, OpenRouter), structural audit pipeline, and institutional export rules.
+            A simple, step-by-step guide to uploading, auditing, restructuring, and exporting your academic work to verified institutional standards.
           </p>
         </div>
 
@@ -88,14 +79,14 @@ function DocsPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab("ai-config")}
+            onClick={() => setActiveTab("formatting-guide")}
             className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
-              activeTab === "ai-config"
+              activeTab === "formatting-guide"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
             }`}
           >
-            <Cpu className="h-4 w-4" /> AI Models (Gemini/Groq/OpenRouter)
+            <FileText className="h-4 w-4" /> Formatting Guidelines
           </button>
 
           <button
@@ -117,7 +108,7 @@ function DocsPage() {
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
             }`}
           >
-            <GraduationCap className="h-4 w-4" /> Institutional Standards
+            <GraduationCap className="h-4 w-4" /> Institutional Formats
           </button>
 
           <button
@@ -128,7 +119,7 @@ function DocsPage() {
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground"
             }`}
           >
-            <FileDown className="h-4 w-4" /> Exporting (DOCX & PDF)
+            <FileDown className="h-4 w-4" /> Exporting (Word & PDF)
           </button>
 
           <button
@@ -151,7 +142,7 @@ function DocsPage() {
               <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
                 <h2 className="font-display text-2xl">Step-by-Step Workflow</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  AcadFormat processes academic documents through a deterministic 6-step pipeline to ensure 100% text fidelity and exact institutional formatting.
+                  AcadFormat processes academic documents through a 6-step pipeline designed to preserve 100% of your text while building a perfect institutional layout.
                 </p>
 
                 <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -159,7 +150,7 @@ function DocsPage() {
                     <span className="font-display text-2xl text-accent font-semibold">01</span>
                     <h3 className="mt-2 font-medium">Upload Document</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Upload your `.docx` or readable text `.pdf` dissertation, thesis, or project report on the Dashboard.
+                      Upload your Microsoft Word (`.docx`) or searchable PDF (`.pdf`) dissertation, lab report, or project report on your Dashboard.
                     </p>
                   </div>
 
@@ -167,31 +158,31 @@ function DocsPage() {
                     <span className="font-display text-2xl text-accent font-semibold">02</span>
                     <h3 className="mt-2 font-medium">Structural Audit</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      The AI model parses your entire work to understand topic, chapters, sections, figures, tables, and abbreviations.
+                      AcadFormat analyzes your document structure, identifying chapter headings, section hierarchy, figures, tables, and acronyms.
                     </p>
                   </div>
 
                   <div className="rounded-lg border border-border/70 bg-secondary/30 p-5">
                     <span className="font-display text-2xl text-accent font-semibold">03</span>
-                    <h3 className="mt-2 font-medium">Review & Decisions</h3>
+                    <h3 className="mt-2 font-medium">Review & Health Score</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Review structural health scorecards. Accept, reject, or edit flagged figure captions, table titles, or acronyms.
+                      Inspect your document health score. Review and accept flagged suggestions for figure captions, table titles, or acronym definitions.
                     </p>
                   </div>
 
                   <div className="rounded-lg border border-border/70 bg-secondary/30 p-5">
                     <span className="font-display text-2xl text-accent font-semibold">04</span>
-                    <h3 className="mt-2 font-medium">Select Institution</h3>
+                    <h3 className="mt-2 font-medium">Select Target Institution</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Choose your target university standard (e.g. COLTECH University of Bamenda or General Thesis Format).
+                      Select your target format rule (e.g. COLTECH University of Bamenda or General Academic Standard).
                     </p>
                   </div>
 
                   <div className="rounded-lg border border-border/70 bg-secondary/30 p-5">
                     <span className="font-display text-2xl text-accent font-semibold">05</span>
-                    <h3 className="mt-2 font-medium">Verbatim Rebuild</h3>
+                    <h3 className="mt-2 font-medium">Reconstruct Document</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      AcadFormat reorders sections, builds TOC/LOT/LOF/LOA, attaches original images, and applies exact styling.
+                      AcadFormat automatically builds preliminary pages (Cover Page, Title Page, Table of Contents, List of Figures/Tables), attaches extracted images, and numbers chapters.
                     </p>
                   </div>
 
@@ -199,7 +190,7 @@ function DocsPage() {
                     <span className="font-display text-2xl text-accent font-semibold">06</span>
                     <h3 className="mt-2 font-medium">Preview & Export</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Inspect the formatted layout on screen, then export your submission-ready Word `.docx` or `.pdf`.
+                      Review the rendered pages directly on screen, then export your submission-ready Word `.docx` or Adobe `.pdf` document.
                     </p>
                   </div>
                 </div>
@@ -208,124 +199,63 @@ function DocsPage() {
               <div className="flex justify-center">
                 <Button asChild size="lg">
                   <Link to={user ? "/dashboard" : "/auth"}>
-                    {user ? "Go to My Dashboard" : "Get Started Now"}
+                    {user ? "Open My Dashboard" : "Get Started Now"}
                   </Link>
                 </Button>
               </div>
             </div>
           )}
 
-          {/* TAB 2: AI CONFIGURATION */}
-          {activeTab === "ai-config" && (
+          {/* TAB 2: FORMATTING GUIDELINES */}
+          {activeTab === "formatting-guide" && (
             <div className="space-y-8">
               <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
-                    <Key className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h2 className="font-display text-2xl">Configuring AI Providers</h2>
-                    <p className="text-sm text-muted-foreground">
-                      AcadFormat natively supports Google Gemini, Groq, OpenRouter, DeepSeek, and Custom AI endpoints.
-                    </p>
-                  </div>
-                </div>
+                <h2 className="font-display text-2xl">Document Formatting Guidelines</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Follow these simple tips to get the best formatting results from your uploaded files.
+                </p>
 
-                <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm text-foreground">
-                  <div className="flex items-start gap-3">
-                    <Sparkles className="mt-0.5 h-5 w-5 text-primary shrink-0" />
-                    <div>
-                      <p className="font-medium text-primary">Flexible Multi-Provider API Architecture</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        You can specify your preferred AI provider in your environment file (`.env`). If `AI_PROVIDER` is set, AcadFormat routes requests to that specific API key. If unconfigured, it automatically detects any available key.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Env snippet */}
-                <div className="mt-6">
-                  <div className="flex items-center justify-between rounded-t-lg bg-secondary px-4 py-2 text-xs font-mono text-muted-foreground">
-                    <span>.env configuration</span>
-                    <button
-                      onClick={() =>
-                        copyCode(
-                          `# Select AI Provider: "gemini" | "groq" | "openrouter" | "lovable"\nAI_PROVIDER="gemini"\n\n# API Keys\nGEMINI_API_KEY="your-gemini-api-key"\nGROQ_API_KEY="your-groq-api-key"\nOPENROUTER_API_KEY="your-openrouter-api-key"`,
-                          "env-snippet"
-                        )
-                      }
-                      className="inline-flex items-center gap-1 hover:text-foreground"
-                    >
-                      {copiedKey === "env-snippet" ? (
-                        <>
-                          <Check className="h-3.5 w-3.5 text-green-500" /> Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" /> Copy
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <pre className="overflow-x-auto rounded-b-lg bg-black/90 p-4 text-xs font-mono text-zinc-100 leading-relaxed">
-{`# Select AI Provider: "gemini" | "groq" | "openrouter" | "lovable"
-AI_PROVIDER="gemini"
-
-# Google Gemini API
-GEMINI_API_KEY="your-gemini-api-key"
-# GEMINI_MODEL="gemini-2.5-flash" (optional override)
-
-# Groq API (ultra-fast inference)
-GROQ_API_KEY="your-groq-api-key"
-# GROQ_MODEL="llama-3.3-70b-versatile" (optional override)
-
-# OpenRouter API (unified router)
-OPENROUTER_API_KEY="your-openrouter-api-key"
-# OPENROUTER_MODEL="google/gemini-2.5-flash" (optional override)`}
-                  </pre>
-                </div>
-
-                {/* Provider Detailed Breakdown */}
-                <div className="mt-8 grid gap-6 sm:grid-cols-3">
-                  <div className="rounded-xl border border-border p-5 bg-secondary/20">
+                <div className="mt-6 grid gap-6 sm:grid-cols-2">
+                  <div className="rounded-lg border border-border p-5 bg-secondary/20">
                     <h3 className="font-semibold text-foreground flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-blue-500"></span> Google Gemini
+                      <ListOrdered className="h-5 w-5 text-primary" /> Headings & Chapters
                     </h3>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Default & recommended for large document parsing. Handles large context windows (up to 1M+ tokens) effortlessly.
-                    </p>
-                    <ul className="mt-4 space-y-1.5 text-xs text-muted-foreground">
-                      <li>• Endpoint: `generativelanguage.googleapis.com`</li>
-                      <li>• Default Model: `gemini-2.5-flash`</li>
-                      <li>• Best for: Dissertation analysis & complex tables</li>
+                    <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                      <li>• Use clear chapter titles like <strong className="text-foreground">CHAPTER 1: INTRODUCTION</strong> or <strong className="text-foreground">1.0 Introduction</strong>.</li>
+                      <li>• Keep sub-sections numbered (e.g. 1.1 Background, 1.2 Problem Statement).</li>
+                      <li>• AcadFormat automatically regenerates your Table of Contents with exact page numbers.</li>
                     </ul>
                   </div>
 
-                  <div className="rounded-xl border border-border p-5 bg-secondary/20">
+                  <div className="rounded-lg border border-border p-5 bg-secondary/20">
                     <h3 className="font-semibold text-foreground flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-orange-500"></span> Groq Cloud
+                      <Zap className="h-5 w-5 text-accent" /> Figures & Topology Diagrams
                     </h3>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      High-speed LPU inference engine. Extremely fast structured JSON extraction for medium-sized papers.
-                    </p>
-                    <ul className="mt-4 space-y-1.5 text-xs text-muted-foreground">
-                      <li>• Endpoint: `api.groq.com/openai/v1`</li>
-                      <li>• Default Model: `llama-3.3-70b-versatile`</li>
-                      <li>• Best for: Rapid structural scanning</li>
+                    <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                      <li>• Figures and diagrams are automatically extracted directly from your PDF or Word document.</li>
+                      <li>• Caption your images (e.g., <em>Figure 1.1: Network Topology Diagram</em>).</li>
+                      <li>• AcadFormat automatically creates a List of Figures in your preliminary pages.</li>
                     </ul>
                   </div>
 
-                  <div className="rounded-xl border border-border p-5 bg-secondary/20">
+                  <div className="rounded-lg border border-border p-5 bg-secondary/20">
                     <h3 className="font-semibold text-foreground flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-purple-500"></span> OpenRouter
+                      <FileText className="h-5 w-5 text-blue-500" /> Tables & Data Grids
                     </h3>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Unified gateway giving access to Claude 3.5, Llama 3.3, Gemini, and DeepSeek models with fallback routing.
-                    </p>
-                    <ul className="mt-4 space-y-1.5 text-xs text-muted-foreground">
-                      <li>• Endpoint: `openrouter.ai/api/v1`</li>
-                      <li>• Default Model: `google/gemini-2.5-flash`</li>
-                      <li>• Best for: Multi-model flexibility</li>
+                    <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                      <li>• Ensure addressing tables or data grids have clear column headers (e.g., Device, Interface, IP Address).</li>
+                      <li>• AcadFormat converts table rows into clean, structured grids for Word and PDF exports.</li>
+                      <li>• Automatically builds a List of Tables with page number references.</li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-lg border border-border p-5 bg-secondary/20">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-emerald-500" /> Abbreviations & Acronyms
+                    </h3>
+                    <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                      <li>• Define acronyms upon first mention (e.g., <em>VLAN (Virtual Local Area Network)</em>).</li>
+                      <li>• AcadFormat compiles all acronyms into an alphabetized List of Abbreviations automatically.</li>
                     </ul>
                   </div>
                 </div>
@@ -351,29 +281,29 @@ OPENROUTER_API_KEY="your-openrouter-api-key"
 
                 <div className="mt-6 space-y-4 text-sm text-muted-foreground leading-relaxed">
                   <p>
-                    Traditional AI assistants often attempt to summarize or rewrite text when reformatting academic papers. In dissertations and research reports, this causes critical loss of technical equations, citations, and data points.
+                    Traditional formatting software often rewrites or alters sentences, leading to loss of technical accuracy, mathematical equations, or specific citations.
                   </p>
                   <p>
-                    <strong>AcadFormat solves this with Start & End Landmark Anchors:</strong>
+                    <strong>AcadFormat uses a deterministic Landmark Extraction Engine:</strong>
                   </p>
                 </div>
 
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5">
                     <h3 className="font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> 1. Verbatim Marker Re-Attacher
+                      <CheckCircle2 className="h-4 w-4" /> Exact Source Text Re-Anchoring
                     </h3>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      The AI model outputs structural metadata along with startMarker and endMarker phrases. AcadFormat locates these exact markers in the original source text and re-extracts the full text verbatim.
+                      Our engine anchors section headers to the exact starting and ending text blocks of your source document. The full original text is extracted verbatim without modifying a single word.
                     </p>
                   </div>
 
                   <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5">
                     <h3 className="font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> 2. Media Marker Mapping (`[IMAGE:n]`)
+                      <CheckCircle2 className="h-4 w-4" /> Media & Image Anchoring
                     </h3>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Embedded images and figures are extracted at their exact locations in the document stream, uploaded safely to storage, and re-anchored into the formatted Word and PDF outputs.
+                      Embedded images and figures are extracted as base64 images, preserved in your document model, and re-placed at their exact corresponding figure markers.
                     </p>
                   </div>
                 </div>
@@ -393,7 +323,7 @@ OPENROUTER_API_KEY="your-openrouter-api-key"
                 <div className="mt-6 space-y-6">
                   <div className="rounded-lg border border-border p-5 bg-secondary/20">
                     <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                      Official Format
+                      Official Verified Format
                     </span>
                     <h3 className="mt-2 font-display text-xl">
                       College of Technology (COLTECH) — University of Bamenda
@@ -438,7 +368,7 @@ OPENROUTER_API_KEY="your-openrouter-api-key"
               <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
                 <h2 className="font-display text-2xl">Exporting Your Formatted Work</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Download submission-ready Word `.docx` or PDF documents with 1-click.
+                  Download submission-ready Word `.docx` or PDF documents with 1 click.
                 </p>
 
                 <div className="mt-6 grid gap-6 sm:grid-cols-2">
@@ -456,7 +386,7 @@ OPENROUTER_API_KEY="your-openrouter-api-key"
                       <FileDown className="h-5 w-5 text-red-600" /> Adobe PDF (.pdf) Export
                     </h3>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Generated server-side with precise page bounds, clean typography, embedded vector graphics, and standard margins ready for printing or electronic submission.
+                      Generated server-side with precise page bounds, clean typography, embedded graphics, and standard margins ready for printing or electronic submission.
                     </p>
                   </div>
                 </div>
@@ -476,16 +406,7 @@ OPENROUTER_API_KEY="your-openrouter-api-key"
                       <HelpCircle className="h-4 w-4 text-primary" /> What file formats can I upload?
                     </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      AcadFormat accepts `.docx` files and searchable `.pdf` files. If your PDF is a scanned image, please convert or OCR it first before uploading.
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg border border-border p-4 bg-secondary/20">
-                    <h3 className="font-medium text-foreground flex items-center gap-2">
-                      <HelpCircle className="h-4 w-4 text-primary" /> How do I switch AI providers?
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Set `AI_PROVIDER="gemini"`, `"groq"`, or `"openrouter"` in your `.env` file along with the corresponding API key. Restart your server and AcadFormat will use the specified provider.
+                      AcadFormat accepts `.docx` files and searchable `.pdf` files.
                     </p>
                   </div>
 
@@ -494,7 +415,7 @@ OPENROUTER_API_KEY="your-openrouter-api-key"
                       <HelpCircle className="h-4 w-4 text-primary" /> What happens if a figure caption is missing?
                     </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      AcadFormat flags missing figure captions or table titles as `REQUIRES_USER_REVIEW`. You can edit and supply the correct title directly on the Document Review panel.
+                      AcadFormat flags missing figure captions or table titles as requiring review. You can edit and supply the correct title directly on the Document Review panel.
                     </p>
                   </div>
 
