@@ -96,6 +96,15 @@ function InstitutionsPage() {
           ))}
         </div>
 
+        {/* Standards Showcase Graphic Banner */}
+        <div className="mt-10 rounded-2xl border border-border bg-slate-950 p-3 sm:p-5 shadow-xl">
+          <img
+            src="/standards-showcase.png"
+            alt="University Thesis Formatting Standards and Specification Guidelines"
+            className="w-full h-auto rounded-xl object-cover max-h-[460px]"
+          />
+        </div>
+
         {/* Active Configuration Details */}
         <div className="mt-10 rounded-2xl border border-border bg-card p-6 sm:p-10 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">

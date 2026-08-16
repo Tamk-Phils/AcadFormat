@@ -184,6 +184,15 @@ function ReviewsPage() {
               <MessageSquarePlus className="h-4 w-4" /> Share Your Recommendation
             </Button>
           </div>
+
+          {/* Visual Showcase Graphic */}
+          <div className="mt-8 rounded-xl border border-border bg-slate-950 p-2 sm:p-4 shadow-xl">
+            <img
+              src="/hero-showcase.png"
+              alt="AcadFormat User Reviews & Verified Document Editing Workspace"
+              className="w-full h-auto rounded-lg object-cover max-h-[380px]"
+            />
+          </div>
         </div>
 
         {/* Filter and Search Bar */}

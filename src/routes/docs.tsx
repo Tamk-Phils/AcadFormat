@@ -194,6 +194,15 @@ function DocsPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Documentation Visual Preview Banner */}
+                <div className="mt-8 rounded-xl border border-border bg-slate-950 p-3 shadow-lg">
+                  <img
+                    src="/restructuring-showcase.png"
+                    alt="AcadFormat Quick Start Dashboard Visual Guide"
+                    className="w-full h-auto rounded-lg object-cover max-h-[420px]"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-center">
