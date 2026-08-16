@@ -290,6 +290,38 @@ function Workspace() {
     await queryClient.invalidateQueries({ queryKey: ["issues", id] });
   }
 
+  async function handleDirectChatEdit(userMsg: string, textToUse?: string) {
+    if (!userMsg.trim()) return;
+
+    setChatHistory((prev) => [...prev, { role: "user", text: userMsg }]);
+    setBusy("chat");
+
+    try {
+      const payload: any = {
+        documentId: id,
+        message: userMsg,
+        selection,
+      };
+      if (textToUse || selectedText) {
+        payload.selectedText = textToUse || selectedText;
+      }
+      const res = await runChatEdit({ data: payload });
+
+      setChatHistory((prev) => [...prev, { role: "assistant", text: res.message }]);
+      setSelectedText("");
+      await queryClient.invalidateQueries({ queryKey: ["document", id] });
+      toast.success("Document updated successfully!");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to edit document.");
+      setChatHistory((prev) => [
+        ...prev,
+        { role: "assistant", text: "Sorry, I encountered an error while trying to process that edit." },
+      ]);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function sendChatMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!chatMessage.trim()) return;
@@ -857,6 +889,12 @@ function Workspace() {
             config={config}
             assetUrls={mergedAssetUrls}
             fileName={doc.data?.file_name}
+            onChatEdit={async (msg, txt) => {
+              await handleDirectChatEdit(msg, txt);
+            }}
+            busy={busy === "chat"}
+            chatHistory={chatHistory}
+            selectedText={selectedText}
           />
         )}
       </main>
