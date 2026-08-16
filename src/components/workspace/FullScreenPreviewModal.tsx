@@ -244,7 +244,7 @@ export function FullScreenPreviewModal({
               <div
                 key={page.index}
                 id={`fullscreen-page-${pIdx + 1}`}
-                className="doc-page-container w-full max-w-[calc(100vw-1rem)] sm:max-w-2xl flex flex-col items-center"
+                className="doc-page-container w-full max-w-2xl mx-auto flex flex-col items-center justify-center"
               >
                 {/* Page Banner */}
                 <div className="w-full mb-1.5 flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
@@ -262,7 +262,10 @@ export function FullScreenPreviewModal({
                       fontFamily: `"${config.font}", "Source Serif 4", serif`,
                       fontSize: `${config.fontSizePt}pt`,
                       lineHeight: config.lineSpacing,
-                      padding: `${config.marginsIn.top}in ${config.marginsIn.right}in ${config.marginsIn.bottom}in ${config.marginsIn.left}in`,
+                      ['--margin-top' as any]: `${config.marginsIn.top}in`,
+                      ['--margin-bottom' as any]: `${config.marginsIn.bottom}in`,
+                      ['--margin-left' as any]: `${config.marginsIn.left}in`,
+                      ['--margin-right' as any]: `${config.marginsIn.right}in`,
                     }}
                   >
                     <DocumentPreviewSinglePage
@@ -421,8 +424,12 @@ function DocumentPreviewSinglePage({
             );
           if (block.type === "image") {
             let url = block.imageId ? assetUrls[block.imageId] : undefined;
-            if (!url && block.imageId && final.images) {
-              const imgObj = final.images.find((i) => i.id === block.imageId);
+            if (!url && final.images && final.images.length > 0) {
+              const imgObj =
+                final.images.find((i) => i.id === block.imageId || i.id === `img-${block.imageId}`) ||
+                final.images.find((i) => i.role === "figure") ||
+                final.images[0];
+
               if (imgObj?.base64) {
                 url = `data:${imgObj.contentType || "image/png"};base64,${imgObj.base64}`;
               }
@@ -450,20 +457,20 @@ function DocumentPreviewSinglePage({
           if (block.type === "title") {
             if (block.borderBox) {
               return (
-                <div key={index} className="my-4 sm:my-6 border-2 border-blue-500 rounded-xl p-4 sm:p-6 text-center font-bold text-base sm:text-lg leading-snug uppercase text-black max-w-full mx-auto font-serif">
+                <div key={index} className="my-4 sm:my-6 border-2 border-blue-500 rounded-xl p-3 sm:p-6 text-center font-bold text-sm sm:text-lg leading-snug uppercase text-black max-w-full mx-auto font-serif break-words">
                   {block.text}
                 </div>
               );
             }
             return (
-              <p key={index} className="doc-title">
+              <p key={index} className="doc-title break-words text-base sm:text-xl font-bold my-2 sm:my-4">
                 {block.text}
               </p>
             );
           }
           if (block.type === "center")
             return (
-              <p key={index} className="doc-center" style={{
+              <p key={index} className="doc-center break-words" style={{
                 fontStyle: block.italic ? "italic" : undefined,
                 fontWeight: block.bold ? "bold" : undefined,
                 fontSize: block.size ? `${block.size / 12}rem` : undefined
@@ -473,20 +480,20 @@ function DocumentPreviewSinglePage({
             );
           if (block.type === "bilingual")
             return (
-              <div key={index} className="flex justify-between items-center text-[10px] sm:text-[11px] font-bold leading-normal mb-5 text-black font-serif">
-                <div className="text-left flex-1">
-                  {(block.left || []).map((line: string, i: number) => <div key={i}>{line}</div>)}
+              <div key={index} className="flex justify-between items-center text-[9px] sm:text-[11px] font-bold leading-normal mb-4 sm:mb-6 text-black font-serif min-w-0 overflow-hidden">
+                <div className="text-left flex-1 min-w-0 break-words">
+                  {(block.left || []).map((line: string, i: number) => <div key={i} className="break-words">{line}</div>)}
                 </div>
                 {block.imageIds && block.imageIds.length > 0 && (
-                  <div className="flex justify-center items-center gap-3 px-2">
+                  <div className="flex justify-center items-center gap-2 sm:gap-4 px-1 sm:px-4 shrink-0">
                     {block.imageIds.map((id: string) => {
                       const url = assetUrls[id] || (id === "logo-coltech" || id === "coltech.jpg" ? "/logo-coltech.jpg" : id === "logo-uba" || id === "uba.jpg" ? "/logo-uba.png" : undefined);
-                      return url ? <img key={id} src={url} alt="Logo" className="h-14 sm:h-20 w-auto" /> : null;
+                      return url ? <img key={id} src={url} alt="Logo" className="h-10 sm:h-20 w-auto object-contain" /> : null;
                     })}
                   </div>
                 )}
-                <div className="text-right flex-1">
-                  {(block.right || []).map((line: string, i: number) => <div key={i}>{line}</div>)}
+                <div className="text-right flex-1 min-w-0 break-words">
+                  {(block.right || []).map((line: string, i: number) => <div key={i} className="break-words">{line}</div>)}
                 </div>
               </div>
             );
@@ -496,29 +503,29 @@ function DocumentPreviewSinglePage({
             const secondaryLogo = secondaryLogoId ? (assetUrls[secondaryLogoId] || (secondaryLogoId === "logo-coltech" ? "/logo-coltech.jpg" : undefined)) : undefined;
 
             return (
-              <div key={index} className="w-full border-b-2 border-black pb-2 sm:pb-3 mb-4 sm:mb-6 font-serif text-black">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="w-14 sm:w-20 flex-shrink-0 flex justify-start">
-                    {ubaLogo && <img src={ubaLogo} alt="UBa Logo" className="h-12 sm:h-16 w-auto" />}
+              <div key={index} className="w-full border-b-2 border-black pb-2 sm:pb-3 mb-4 sm:mb-6 font-serif text-black overflow-hidden">
+                <div className="flex justify-between items-start gap-1 sm:gap-4">
+                  <div className="w-10 sm:w-20 shrink-0 flex justify-start">
+                    {ubaLogo && <img src={ubaLogo} alt="UBa Logo" className="h-10 sm:h-16 w-auto max-w-full object-contain" />}
                   </div>
-                  <div className="flex-1 text-center leading-tight space-y-0.5">
+                  <div className="flex-1 text-center leading-tight space-y-0.5 min-w-0 break-words">
                     {(block.left || []).map((line: string, idx: number) => {
                       const isBold = idx === 0 || idx === 2 || idx === 5 || idx === 8;
                       const isItalic = idx === 9;
-                      const fontSizeClass = idx === 5 ? "text-[10px] sm:text-xs font-semibold" : (idx === 6 || idx === 7 || idx === 9) ? "text-[7px] sm:text-[8px]" : "text-[8px] sm:text-[9px]";
+                      const fontSizeClass = idx === 5 ? "text-[9px] sm:text-xs font-semibold" : (idx === 6 || idx === 7 || idx === 9) ? "text-[7px] sm:text-[8px]" : "text-[7.5px] sm:text-[9px]";
                       if (line === "") return <div key={idx} className="h-1" />;
                       return (
                         <div
                           key={idx}
-                          className={`${fontSizeClass} ${isBold ? "font-bold" : ""} ${isItalic ? "italic" : ""}`}
+                          className={`${fontSizeClass} ${isBold ? "font-bold" : ""} ${isItalic ? "italic" : ""} break-words leading-tight`}
                         >
                           {line}
                         </div>
                       );
                     })}
                   </div>
-                  <div className="w-14 sm:w-20 flex-shrink-0 flex justify-end">
-                    {secondaryLogo && <img src={secondaryLogo} alt="Secondary Logo" className="h-12 sm:h-16 w-auto" />}
+                  <div className="w-10 sm:w-20 shrink-0 flex justify-end">
+                    {secondaryLogo && <img src={secondaryLogo} alt="Secondary Logo" className="h-10 sm:h-16 w-auto max-w-full object-contain" />}
                   </div>
                 </div>
               </div>

@@ -405,8 +405,9 @@ export const chatEditDocumentFn = createServerFn({ method: "POST" })
       .single();
     if (error || !row?.model) throw new Error("This document has not been analysed yet.");
 
+    const currentModel = row.model as unknown as DocumentModel;
     const chatInput: any = {
-      model: row.model as unknown as DocumentModel,
+      model: currentModel,
       message: data.message,
     };
     if (data.selectedText) {
@@ -414,16 +415,23 @@ export const chatEditDocumentFn = createServerFn({ method: "POST" })
     }
     const result = await chatEditDocument(chatInput);
 
+    // Ensure images and original blocks are strictly preserved
+    const updatedModel: DocumentModel = {
+      ...result.model,
+      images: (result.model.images && result.model.images.length > 0) ? result.model.images : currentModel.images,
+      original: (result.model.original && result.model.original.length > 0) ? result.model.original : currentModel.original,
+    };
+
     // Rebuild final document after edit
     const config = resolveConfig(data.selection);
-    const final = buildFinalDocument({ model: result.model, config, selection: data.selection });
-    const audit = auditFinalDocument(final, result.model);
+    const final = buildFinalDocument({ model: updatedModel, config, selection: data.selection });
+    const audit = auditFinalDocument(final, updatedModel);
 
     await supabase
       .from("documents")
       .update({
         status: "formatted",
-        model: toJson(result.model),
+        model: toJson(updatedModel),
         final_document: toJson(final),
         final_audit: toJson(audit),
       })

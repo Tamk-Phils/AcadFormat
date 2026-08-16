@@ -190,7 +190,7 @@
   box-shadow: var(--shadow-page);
   width: 100%;
   max-width: 46rem;
-  aspect-ratio: 1 / 1.414;
+  min-height: 59.5rem;
   font-family: var(--font-serif);
 }
 
@@ -199,29 +199,49 @@
   border-radius: var(--radius-lg);
   padding: 2rem 1rem;
   overflow-x: auto;
+  width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
-.doc-page {
+.doc-page, .doc-page-full {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 46rem;
+  min-height: 59.5rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  margin-left: auto;
+  margin-right: auto;
+  padding-top: var(--margin-top, 1in);
+  padding-bottom: var(--margin-bottom, 1in);
+  padding-left: var(--margin-left, 1in);
+  padding-right: var(--margin-right, 1in);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 640px) {
   .doc-canvas {
-    padding: 0.5rem 0.25rem;
+    padding: 0.5rem 0.25rem !important;
     border-radius: var(--radius-md);
-    overflow-x: auto;
   }
-  .doc-page {
-    padding: 1.5rem 1rem !important;
+  .doc-page, .doc-page-full {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
     max-width: 100% !important;
-    box-sizing: border-box !important;
+    min-height: auto !important;
+    font-size: 0.85em !important;
   }
 }
 .doc-page-body {

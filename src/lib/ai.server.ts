@@ -489,6 +489,8 @@ function normalize(result: AnalysisResult): AnalysisResult {
       references: model.references || [],
       appendices: model.appendices || [],
       abbreviations: model.abbreviations || [],
+      images: model.images || (result as any).model?.images || [],
+      original: model.original || (result as any).model?.original || [],
     },
   };
 }
