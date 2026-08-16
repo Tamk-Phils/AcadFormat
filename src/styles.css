@@ -214,15 +214,14 @@
 
 @media (max-width: 1024px) {
   .doc-canvas {
-    padding: 0.75rem 0.35rem;
+    padding: 0.5rem 0.25rem;
     border-radius: var(--radius-md);
+    overflow-x: auto;
   }
   .doc-page {
-    padding: 1.25rem 0.75rem !important;
-    aspect-ratio: auto !important;
-    min-height: auto !important;
+    padding: 1.5rem 1rem !important;
     max-width: 100% !important;
-    width: 100% !important;
+    box-sizing: border-box !important;
   }
 }
 .doc-page-body {

@@ -7,7 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { SiteHeader } from "@/components/SiteHeader";
 import { DocumentPreview } from "@/components/workspace/DocumentPreview";
 import { OriginalPreview } from "@/components/workspace/OriginalPreview";
+import { FullScreenPreviewModal } from "@/components/workspace/FullScreenPreviewModal";
 import { Button } from "@/components/ui/button";
+import { Maximize2, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -86,6 +88,7 @@ function Workspace() {
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [selectedText, setSelectedText] = useState("");
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [fullScreenModalOpen, setFullScreenModalOpen] = useState(false);
 
   const scrollToSection = (sectionId: string) => {
     const el = document.getElementById(sectionId);
@@ -575,6 +578,13 @@ function Workspace() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="default"
+                  onClick={() => setFullScreenModalOpen(true)}
+                  className="gap-1.5 bg-primary text-primary-foreground font-semibold"
+                >
+                  <Maximize2 className="h-4 w-4" /> Full Screen Preview
+                </Button>
                 <Button onClick={() => download("docx")} disabled={busy === "docx"}>
                   {busy === "docx" ? "Preparing…" : "Download DOCX"}
                 </Button>
@@ -598,7 +608,20 @@ function Workspace() {
               
               <div className="grid gap-6 lg:grid-cols-3">
                 {/* Document Preview (Left) */}
-                <div className="lg:col-span-2 space-y-4">
+                <div className="lg:col-span-2 space-y-3">
+                  <div className="flex items-center justify-between bg-secondary/60 border border-border rounded-xl px-4 py-2 text-xs">
+                    <span className="font-medium text-foreground">
+                      Document Pages ({final.pages.length} Pages)
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setFullScreenModalOpen(true)}
+                      className="h-7 gap-1 text-xs text-primary font-semibold hover:bg-primary/10"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" /> Open Page-by-Page View
+                    </Button>
+                  </div>
                   <div className="doc-canvas">
                     <DocumentPreview final={final} config={config} assetUrls={mergedAssetUrls} />
                   </div>
@@ -823,6 +846,18 @@ function Workspace() {
               </div>
             )}
           </>
+        )}
+
+        {/* Full Screen Document Reader Modal */}
+        {final && (
+          <FullScreenPreviewModal
+            isOpen={fullScreenModalOpen}
+            onClose={() => setFullScreenModalOpen(false)}
+            final={final}
+            config={config}
+            assetUrls={mergedAssetUrls}
+            fileName={doc.data?.file_name}
+          />
         )}
       </main>
     </div>
