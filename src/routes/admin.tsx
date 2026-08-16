@@ -166,9 +166,9 @@ function AdminPage() {
     try {
       const { data, error } = await supabase
         .from("documents")
-        .select("id, file_name, file_type, status, created_at, institution")
+        .select("id, file_name, file_type, status, created_at, institution, storage_path")
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (!error && data) {
         setDocuments(data);
@@ -177,6 +177,22 @@ function AdminPage() {
       console.error("Failed to load documents:", err);
     } finally {
       setLoadingDocs(false);
+    }
+  };
+
+  const handleDeleteDocumentAdmin = async (docId: string, storagePath?: string) => {
+    if (!confirm("Are you sure you want to delete this document from the system?")) return;
+    try {
+      if (storagePath) {
+        await supabase.storage.from("documents").remove([storagePath]);
+      }
+      const { error } = await supabase.from("documents").delete().eq("id", docId);
+      if (error) throw error;
+      toast.success("Document deleted from system.");
+      loadDocuments();
+    } catch (err) {
+      toast.error("Failed to delete document.");
+      console.error("Error deleting document:", err);
     }
   };
 
@@ -284,7 +300,7 @@ function AdminPage() {
       return;
     }
 
-    await submitUserReview({
+    const created = await submitUserReview({
       author_name: newAuthor.trim(),
       author_role: newRole.trim(),
       institution: newInst.trim() || "University Student",
@@ -293,6 +309,9 @@ function AdminPage() {
       comment: newComment.trim(),
       recommendation: newRec.trim(),
     });
+
+    // Auto-approve since this was created by the Admin
+    await updateReviewStatusAdmin(created.id, { status: "approved", is_featured: newRating >= 5 });
 
     toast.success("New review created and published.");
     setShowAddReviewModal(false);
@@ -760,6 +779,7 @@ function AdminPage() {
                         <th className="px-4 py-3">Institution Config</th>
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3">Uploaded Date</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -789,6 +809,17 @@ function AdminPage() {
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">
                             {new Date(doc.created_at).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteDocumentAdmin(doc.id, doc.storage_path)}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              title="Delete document from system"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </td>
                         </tr>
                       ))}

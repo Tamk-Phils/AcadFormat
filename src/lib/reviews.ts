@@ -149,8 +149,8 @@ export async function submitUserReview(
   const newReview: ReviewItem = {
     ...input,
     id: `rev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    status: "approved", // Auto-approved for immediate user feedback
-    is_featured: input.rating >= 5,
+    status: "pending", // Pending admin review and approval before displaying publicly
+    is_featured: false,
     created_at: new Date().toISOString(),
   };
 

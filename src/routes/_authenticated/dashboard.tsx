@@ -7,7 +7,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, UploadCloud } from "lucide-react";
+import { FileText, UploadCloud, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -35,13 +35,14 @@ function Dashboard() {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const documents = useQuery({
     queryKey: ["documents"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("documents")
-        .select("id, file_name, status, created_at, institution")
+        .select("id, file_name, status, created_at, institution, storage_path")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -77,6 +78,32 @@ function Dashboard() {
       toast.error(error instanceof Error ? error.message : "Upload failed.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDeleteDocument(e: React.MouseEvent, docId: string, storagePath?: string) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm("Are you sure you want to delete this document? This will remove it from your account.")) {
+      return;
+    }
+
+    setDeletingId(docId);
+    try {
+      if (storagePath) {
+        await supabase.storage.from("documents").remove([storagePath]);
+      }
+      const { error } = await supabase.from("documents").delete().eq("id", docId);
+      if (error) throw error;
+
+      toast.success("Document deleted successfully.");
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+    } catch (err) {
+      toast.error("Failed to delete document.");
+      console.error(err);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -123,25 +150,39 @@ function Dashboard() {
             <p className="text-sm text-muted-foreground">Nothing here yet.</p>
           )}
           {documents.data?.map((doc) => (
-            <Link
+            <div
               key={doc.id}
-              to="/documents/$id"
-              params={{ id: doc.id }}
-              className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4 transition-colors hover:border-accent"
+              className="group flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4 transition-colors hover:border-accent"
             >
-              <span className="flex items-center gap-3">
-                <FileText className="size-4 text-muted-foreground" />
-                <span>
-                  <span className="block font-medium">{doc.file_name}</span>
+              <Link
+                to="/documents/$id"
+                params={{ id: doc.id }}
+                className="flex flex-1 items-center gap-3 min-w-0 pr-4"
+              >
+                <FileText className="size-4 text-muted-foreground shrink-0" />
+                <span className="min-w-0">
+                  <span className="block font-medium truncate">{doc.file_name}</span>
                   <span className="block text-xs text-muted-foreground">
                     {new Date(doc.created_at).toLocaleString()}
                   </span>
                 </span>
-              </span>
-              <Badge variant={doc.status === "failed" ? "destructive" : "secondary"}>
-                {STATUS_LABEL[doc.status] ?? doc.status}
-              </Badge>
-            </Link>
+              </Link>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge variant={doc.status === "failed" ? "destructive" : "secondary"}>
+                  {STATUS_LABEL[doc.status] ?? doc.status}
+                </Badge>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  disabled={deletingId === doc.id}
+                  onClick={(e) => handleDeleteDocument(e, doc.id, doc.storage_path)}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  title="Delete document"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           ))}
         </section>
       </main>
