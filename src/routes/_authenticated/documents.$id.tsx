@@ -85,6 +85,14 @@ function Workspace() {
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
   const [selectedText, setSelectedText] = useState("");
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
+
+  const scrollToSection = (sectionId: string) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   const doc = useQuery({
     queryKey: ["document", id],
@@ -315,13 +323,38 @@ function Workspace() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden">
       <SiteHeader user={user} />
-      <main className="mx-auto max-w-6xl px-5 py-10">
+      <main className="mx-auto max-w-6xl px-3 sm:px-5 py-6 sm:py-10 w-full overflow-x-hidden">
+        {/* Mobile Quick Section Switcher Bar */}
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border py-2 px-1 mb-4 flex items-center justify-between overflow-x-auto gap-2 text-xs scrollbar-none sm:hidden">
+          <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 whitespace-nowrap" onClick={() => scrollToSection("section-1")}>
+            1. Analysis
+          </Button>
+          {original.data && (
+            <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 whitespace-nowrap" onClick={() => scrollToSection("section-1b")}>
+              1b. Original
+            </Button>
+          )}
+          {issues.data && issues.data.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 whitespace-nowrap" onClick={() => scrollToSection("section-2")}>
+              2. Proposals ({issues.data.length})
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 whitespace-nowrap" onClick={() => scrollToSection("section-3")}>
+            3. Institution
+          </Button>
+          {final && (
+            <Button size="sm" variant="default" className="h-7 text-xs px-2.5 whitespace-nowrap bg-primary text-primary-foreground font-semibold" onClick={() => scrollToSection("section-4")}>
+              👁️ 4. Preview
+            </Button>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-display text-3xl">{doc.data?.file_name ?? "Document"}</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="font-display text-2xl sm:text-3xl">{doc.data?.file_name ?? "Document"}</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
               {config.label} · {config.source}
             </p>
           </div>
@@ -335,9 +368,9 @@ function Workspace() {
         )}
 
         {/* Step 1 — Understand & analyse */}
-        <Card className="mt-8 shadow-soft">
+        <Card id="section-1" className="mt-6 sm:mt-8 shadow-soft">
           <CardHeader>
-            <CardTitle className="font-display text-2xl">1 · Understand &amp; analyse</CardTitle>
+            <CardTitle className="font-display text-xl sm:text-2xl">1 · Understand &amp; analyse</CardTitle>
             <CardDescription>
               The engine reads the whole document, learns what the work is about, then audits it.
             </CardDescription>
@@ -409,11 +442,11 @@ function Workspace() {
           </CardContent>
         </Card>
 
-        {/* Step 2 — Review issues */}
+        {/* Step 1b — Your document as uploaded */}
         {original.data && original.data.blocks.length > 0 && (
-          <Card className="mt-8 shadow-soft">
+          <Card id="section-1b" className="mt-6 sm:mt-8 shadow-soft">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">
+              <CardTitle className="font-display text-xl sm:text-2xl">
                 1b · Your document as uploaded
               </CardTitle>
               <CardDescription>
@@ -429,10 +462,11 @@ function Workspace() {
           </Card>
         )}
 
+        {/* Step 2 — Review proposals */}
         {issues.data && issues.data.length > 0 && (
-          <Card className="mt-8 shadow-soft">
+          <Card id="section-2" className="mt-6 sm:mt-8 shadow-soft">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">2 · Review proposals</CardTitle>
+              <CardTitle className="font-display text-xl sm:text-2xl">2 · Review proposals</CardTitle>
               <CardDescription>
                 Nothing is changed until you accept it. Reject to keep your original wording.
               </CardDescription>
@@ -446,9 +480,9 @@ function Workspace() {
         )}
 
         {/* Step 3 — Institution + format */}
-        <Card className="mt-8 shadow-soft">
+        <Card id="section-3" className="mt-6 sm:mt-8 shadow-soft">
           <CardHeader>
-            <CardTitle className="font-display text-2xl">3 · Institutional format</CardTitle>
+            <CardTitle className="font-display text-xl sm:text-2xl">3 · Institutional format</CardTitle>
             <CardDescription>
               Only verified configurations are offered. COLTECH uses its own official rules.
             </CardDescription>
@@ -665,10 +699,10 @@ function Workspace() {
 
         {/* Step 4 — Verify & preview */}
         {final && (
-          <Card className="mt-8 shadow-soft">
+          <Card id="section-4" className="mt-6 sm:mt-8 shadow-soft">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle className="font-display text-2xl">4 · Verify &amp; preview</CardTitle>
+                <CardTitle className="font-display text-xl sm:text-2xl">4 · Verify &amp; preview</CardTitle>
                 <CardDescription>
                   {audit?.pageCount} pages rebuilt ·{" "}
                   {audit?.passed ? "final check passed" : `${Array.isArray(audit?.findings) ? audit.findings.length : 0} item(s) to review`}
@@ -704,8 +738,8 @@ function Workspace() {
                   </div>
                 </div>
 
-                {/* AI Assistant Chat Panel (Right) */}
-                <div className="lg:col-span-1 space-y-4">
+                {/* AI Assistant Chat Panel (Right on Desktop) */}
+                <div className="hidden lg:block lg:col-span-1 space-y-4">
                   <div className="sticky top-6 flex flex-col h-[600px] border border-border rounded-xl bg-card p-4 shadow-soft">
                     <div className="border-b border-border pb-3 mb-3">
                       <h4 className="font-semibold text-sm flex items-center gap-2">
@@ -726,7 +760,7 @@ function Workspace() {
                         <div className="text-center text-muted-foreground my-auto py-8 px-2 space-y-2">
                           <p className="font-medium text-xs">No instructions sent yet.</p>
                           <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                            Highlight some text on the left to edit/remove it, or type requests like:
+                            Highlight text on the left to edit/remove it, or type requests like:
                           </p>
                           <ul className="text-left text-xs bg-secondary/40 p-2.5 rounded-lg border border-border/50 space-y-1 list-disc pl-5">
                             <li>"Remove the section on security implications in chapter 3"</li>
@@ -805,6 +839,124 @@ function Workspace() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Mobile Floating Action Button and Assistant Drawer */}
+        {final && (
+          <>
+            <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2 lg:hidden">
+              {selectedText && !mobileChatOpen && (
+                <Badge className="bg-emerald-600 text-white animate-bounce shadow-md text-[11px] py-1 px-2.5">
+                  Text Selected! Tap AI Assistant
+                </Badge>
+              )}
+              <Button
+                onClick={() => setMobileChatOpen(!mobileChatOpen)}
+                className="shadow-xl font-medium text-xs rounded-full px-4 py-3 bg-primary text-primary-foreground flex items-center gap-2 border border-primary/20"
+              >
+                <span className="text-sm">🤖</span> {mobileChatOpen ? "Close AI Assistant" : "AI Assistant Chat"}
+                {selectedText && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />}
+              </Button>
+            </div>
+
+            {mobileChatOpen && (
+              <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs p-2 lg:hidden">
+                <div className="w-full max-w-lg bg-card rounded-t-2xl p-4 shadow-2xl border border-border animate-in slide-in-from-bottom duration-200">
+                  <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      AI Academic Editor
+                    </h4>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setMobileChatOpen(false)}>
+                      ✕ Close
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col h-[65vh]">
+                    <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1 text-sm scrollbar-thin flex flex-col">
+                      {chatHistory.length === 0 ? (
+                        <div className="text-center text-muted-foreground my-auto py-6 px-2 space-y-2">
+                          <p className="font-medium text-xs">No instructions sent yet.</p>
+                          <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                            Highlight text in preview or request changes:
+                          </p>
+                          <ul className="text-left text-xs bg-secondary/40 p-2.5 rounded-lg border border-border/50 space-y-1 list-disc pl-5">
+                            <li>"Remove chapter 3 security section"</li>
+                            <li>"Add future research directions"</li>
+                          </ul>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {chatHistory.map((msg, i) => (
+                            <div
+                              key={i}
+                              className={`p-3 rounded-lg ${
+                                msg.role === "user"
+                                  ? "bg-primary/5 text-primary ml-6"
+                                  : "bg-secondary text-secondary-foreground mr-6"
+                              }`}
+                            >
+                              <p className="text-xs font-semibold mb-1 uppercase tracking-wider opacity-60">
+                                {msg.role === "user" ? "You" : "AI Editor"}
+                              </p>
+                              <p className="leading-relaxed text-xs whitespace-pre-wrap">{msg.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {busy === "chat" && (
+                        <div className="bg-secondary text-secondary-foreground p-3 rounded-lg mr-6 animate-pulse mt-3">
+                          <p className="text-xs font-semibold mb-1 uppercase tracking-wider opacity-60">AI Editor</p>
+                          <p className="text-xs">Applying changes and regenerating layout...</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedText && (
+                      <div className="bg-secondary/60 border border-border p-2.5 rounded-lg text-xs mb-3 space-y-1">
+                        <div className="flex items-center justify-between font-medium">
+                          <span className="text-xs text-foreground/80">Selected text:</span>
+                          <button 
+                            type="button"
+                            onClick={() => setSelectedText("")}
+                            className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <p className="italic text-muted-foreground line-clamp-2 leading-relaxed">"{selectedText}"</p>
+                      </div>
+                    )}
+
+                    <form onSubmit={sendChatMessage} className="space-y-2 mt-auto">
+                      <Textarea
+                        placeholder={
+                          selectedText
+                            ? "Tell the AI what to do with selected text..."
+                            : "Type formatting or content instructions..."
+                        }
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        rows={2}
+                        disabled={busy === "chat"}
+                        className="resize-none text-xs"
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full text-xs"
+                        disabled={busy === "chat" || !chatMessage.trim()}
+                      >
+                        {busy === "chat" ? "Applying..." : "Apply Edit"}
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

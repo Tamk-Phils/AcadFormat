@@ -44,7 +44,7 @@ function htmlToOriginalBlocks(html: string): OriginalBlock[] {
       const trMatches = chunk.match(/<tr[\s\S]*?<\/tr>/gi) || [];
       for (const trHtml of trMatches) {
         const cellMatches = trHtml.match(/<(?:td|th)[\s\S]*?<\/(?:td|th)>/gi) || [];
-        const cells = cellMatches.map((cellHtml) => stripTags(cellHtml));
+        const cells = cellMatches.map((cellHtml) => sanitizeTableCell(cellHtml));
         if (cells.length > 0) rows.push(cells);
       }
       if (rows.length > 0) {
@@ -67,13 +67,19 @@ function htmlToOriginalBlocks(html: string): OriginalBlock[] {
   return blocks;
 }
 
+function sanitizeTableCell(cellHtml: string): string {
+  const text = stripTags(cellHtml).replace(/\s+/g, " ").trim();
+  // Replace pipe characters inside cell text so markdown format parser doesn't treat them as column delimiters
+  return text.replace(/\|/g, "&#124;");
+}
+
 function convertHtmlTablesToMarkdown(html: string): string {
   return html.replace(/<table[\s\S]*?<\/table>/gi, (tableHtml) => {
     const rows: string[][] = [];
     const trMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
     for (const trHtml of trMatches) {
       const cellMatches = trHtml.match(/<(?:td|th)[\s\S]*?<\/(?:td|th)>/gi) || [];
-      const cells = cellMatches.map((cellHtml) => stripTags(cellHtml));
+      const cells = cellMatches.map((cellHtml) => sanitizeTableCell(cellHtml));
       if (cells.length > 0) rows.push(cells);
     }
     if (rows.length === 0) return "\n[TABLE]\n";

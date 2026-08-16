@@ -340,13 +340,12 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     const isCaptionLine = /^(table|tab\.)\s*\d+/i.test(line);
     const hasPipes = (line.match(/\|/g) || []).length >= 2;
     const hasTabs = line.includes("\t");
-    const hasMultiSpace = /\S\s{3,}\S/.test(line);
     const isDivider = /^[:\|\-\s]{3,}$/.test(line) && line.includes("-");
 
     const checkNextIsTable = () => {
       if (i + 1 >= lines.length) return false;
       const next = lines[i + 1]!.trim();
-      return (next.match(/\|/g) || []).length >= 2 || next.includes("\t") || /\S\s{3,}\S/.test(next);
+      return (next.match(/\|/g) || []).length >= 2 || next.includes("\t") || (/^[:\|\-\s]{3,}$/.test(next) && next.includes("-"));
     };
 
     const isTableRow =
@@ -354,7 +353,6 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       line.includes("  |  ") ||
       (line.startsWith("|") && line.endsWith("|")) ||
       hasTabs ||
-      hasMultiSpace ||
       isDivider ||
       (isCaptionLine && checkNextIsTable());
 
