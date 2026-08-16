@@ -77,23 +77,40 @@ function AuthPage() {
   async function google() {
     setGoogleBusy(true);
     try {
-      // First try Lovable auth adapter
-      const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: `${window.location.origin}/dashboard`,
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+
+      // Try direct Supabase OAuth first
+      const { error: sbError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
       });
 
-      if (result?.error) {
-        // Fallback to direct Supabase OAuth
-        const { error: sbError } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: `${window.location.origin}/dashboard`,
-          },
+      if (sbError) {
+        console.warn("Direct Supabase OAuth notice:", sbError);
+        // Try Lovable Cloud Auth adapter
+        const result = await lovable.auth.signInWithOAuth("google", {
+          redirect_uri: redirectUrl,
         });
-        if (sbError) throw sbError;
+
+        if (result?.error) {
+          throw sbError || result.error;
+        }
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Google sign-in failed. Try again.");
+      console.error("Google sign-in error:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes("provider") || msg.includes("not enabled") || msg.includes("404")) {
+        toast.error("Google authentication provider is not enabled in Supabase yet. Please register or sign in with your email below.");
+        setMode("signup");
+      } else {
+        toast.error("Google sign-in failed. Please try signing up with your email.");
+      }
       setGoogleBusy(false);
     }
   }
