@@ -439,3 +439,117 @@ export const chatEditDocumentFn = createServerFn({ method: "POST" })
 
     return { ok: true as const, message: result.message, audit };
   });
+
+/** Administrative Server Functions using service role to aggregate system state */
+export const getAdminUsersListFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { data: profiles } = await supabaseAdmin.from("profiles").select("*").order("created_at", { ascending: false });
+  const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
+  const authUsers = authData?.users ?? [];
+
+  const { data: docs } = await supabaseAdmin.from("documents").select("user_id, created_at, institution");
+
+  const docCountMap: Record<string, number> = {};
+  if (docs) {
+    docs.forEach((d: any) => {
+      if (d.user_id) docCountMap[d.user_id] = (docCountMap[d.user_id] || 0) + 1;
+    });
+  }
+
+  const userMap: Record<string, any> = {};
+
+  // Ground truth: map auth.users
+  authUsers.forEach((au) => {
+    const email = au.email ?? "";
+    const lower = email.toLowerCase();
+    const isAdminEmail = lower === "philss7872@gmail.com" || lower === "phils7872@gmail.com";
+    const meta = au.user_metadata || {};
+    const name = meta.full_name || meta.name || (isAdminEmail ? "Phil (Platform Administrator)" : `Scholar (${au.id.substring(0, 6)})`);
+
+    userMap[au.id] = {
+      id: au.id,
+      email,
+      name,
+      role: isAdminEmail ? "System Admin" : "Registered User",
+      institution: "University of Bamenda",
+      docCount: docCountMap[au.id] || 0,
+      createdAt: au.created_at || new Date().toISOString(),
+      status: isAdminEmail ? "admin" : au.email_confirmed_at ? "verified" : "active",
+    };
+  });
+
+  // Aggregate/merge profiles table
+  if (profiles) {
+    profiles.forEach((p: any) => {
+      const lower = (p.email || "").toLowerCase();
+      const isAdminRole = p.role === "admin" || lower === "philss7872@gmail.com" || lower === "phils7872@gmail.com";
+      const existing = userMap[p.id] || {};
+
+      userMap[p.id] = {
+        ...existing,
+        id: p.id,
+        email: p.email || existing.email || "",
+        name: p.full_name || existing.name || (isAdminRole ? "Phil (Platform Administrator)" : `Scholar (${p.id.substring(0, 6)})`),
+        role: isAdminRole ? "System Admin" : "Registered User",
+        institution: p.institution || existing.institution || "University of Bamenda",
+        docCount: docCountMap[p.id] || existing.docCount || 0,
+        createdAt: p.created_at || existing.createdAt || new Date().toISOString(),
+        status: isAdminRole ? "admin" : existing.status || "active",
+      };
+    });
+  }
+
+  return Object.values(userMap);
+});
+
+export const getAdminDocumentsListFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { data: docs, error } = await supabaseAdmin
+    .from("documents")
+    .select("id, user_id, file_name, file_type, status, created_at, institution, storage_path")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) throw new Error(error.message);
+  return docs ?? [];
+});
+
+export const deleteDocumentAdminFn = createServerFn({ method: "POST" })
+  .validator((data: { documentId: string; storagePath?: string }) => data)
+  .handler(async ({ data }) => {
+    if (data.storagePath) {
+      await supabaseAdmin.storage.from("documents").remove([data.storagePath]);
+    }
+    const { error } = await supabaseAdmin.from("documents").delete().eq("id", data.documentId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const getAdminReviewsListFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { data: reviews, error } = await supabaseAdmin
+    .from("reviews")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return reviews ?? [];
+});
+
+export const updateReviewAdminFn = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      id: string;
+      updates: Partial<{ status: string; is_featured: boolean; rating: number; comment: string; recommendation: string }>;
+    }) => data
+  )
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin.from("reviews").update(data.updates).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const deleteReviewAdminFn = createServerFn({ method: "POST" })
+  .validator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin.from("reviews").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });

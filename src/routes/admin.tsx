@@ -32,6 +32,14 @@ import {
   submitUserReview,
   type ReviewItem,
 } from "@/lib/reviews";
+import {
+  getAdminUsersListFn,
+  getAdminDocumentsListFn,
+  deleteDocumentAdminFn,
+  getAdminReviewsListFn,
+  updateReviewAdminFn,
+  deleteReviewAdminFn,
+} from "@/lib/acadformat.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -45,9 +53,12 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
+const ADMIN_EMAILS = ["philss7872@gmail.com", "phils7872@gmail.com"];
 const ADMIN_EMAIL = "philss7872@gmail.com";
 const ADMIN_PASS = "Phil$7872";
 const ADMIN_SESSION_KEY = "acadformat_admin_authenticated";
+
+const isAdminEmail = (email?: string) => (email ? ADMIN_EMAILS.includes(email.trim().toLowerCase()) : false);
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -105,7 +116,7 @@ function AdminPage() {
           .maybeSingle();
 
         const isDbAdmin = profile?.role === "admin";
-        const isEmailAdmin = currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        const isEmailAdmin = isAdminEmail(currentUser.email);
 
         if (isDbAdmin || isEmailAdmin) {
           localStorage.setItem(ADMIN_SESSION_KEY, "true");
@@ -156,7 +167,7 @@ function AdminPage() {
           .maybeSingle();
 
         const isDbAdmin = profile?.role === "admin";
-        const isEmailAdmin = data.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        const isEmailAdmin = isAdminEmail(data.user.email);
 
         if (isDbAdmin || isEmailAdmin) {
           localStorage.setItem(ADMIN_SESSION_KEY, "true");
@@ -171,7 +182,7 @@ function AdminPage() {
     }
 
     // 2. Fallback local admin check
-    const isEmailMatch = cleanEmail === ADMIN_EMAIL.toLowerCase();
+    const isEmailMatch = isAdminEmail(cleanEmail);
     const isPassMatch = cleanPassword === ADMIN_PASS || cleanPassword.toLowerCase() === ADMIN_PASS.toLowerCase();
 
     if (isEmailMatch && isPassMatch) {
@@ -208,6 +219,14 @@ function AdminPage() {
 
   const loadReviews = async () => {
     setLoadingReviews(true);
+    try {
+      const revsData = await getAdminReviewsListFn().catch(() => null);
+      if (revsData && Array.isArray(revsData) && revsData.length > 0) {
+        setReviews(revsData);
+        setLoadingReviews(false);
+        return;
+      }
+    } catch (err) {}
     const data = await fetchAllReviewsAdmin();
     setReviews(data);
     setLoadingReviews(false);
@@ -216,6 +235,13 @@ function AdminPage() {
   const loadDocuments = async () => {
     setLoadingDocs(true);
     try {
+      const docsData = await getAdminDocumentsListFn().catch(() => null);
+      if (docsData && Array.isArray(docsData)) {
+        setDocuments(docsData);
+        setLoadingDocs(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("documents")
         .select("id, file_name, file_type, status, created_at, institution, storage_path")
@@ -235,11 +261,13 @@ function AdminPage() {
   const handleDeleteDocumentAdmin = async (docId: string, storagePath?: string) => {
     if (!confirm("Are you sure you want to delete this document from the system?")) return;
     try {
-      if (storagePath) {
-        await supabase.storage.from("documents").remove([storagePath]);
-      }
-      const { error } = await supabase.from("documents").delete().eq("id", docId);
-      if (error) throw error;
+      await deleteDocumentAdminFn({ data: { documentId: docId, storagePath } }).catch(async () => {
+        if (storagePath) {
+          await supabase.storage.from("documents").remove([storagePath]);
+        }
+        const { error } = await supabase.from("documents").delete().eq("id", docId);
+        if (error) throw error;
+      });
       toast.success("Document deleted from system.");
       loadDocuments();
     } catch (err) {
@@ -274,13 +302,20 @@ function AdminPage() {
   const loadUsers = async () => {
     setLoadingUsers(true);
     try {
-      // 1. Query all real profiles from database
+      // 1. Try server-side aggregation first (bypasses RLS & fetches auth.users)
+      const usersData = await getAdminUsersListFn().catch(() => null);
+      if (usersData && Array.isArray(usersData) && usersData.length > 0) {
+        setUsersList(usersData);
+        setLoadingUsers(false);
+        return;
+      }
+
+      // 2. Fallback client-side query
       const { data: profiles } = await supabase
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false });
 
-      // 2. Query documents to calculate per-user document count
       const { data: docsData } = await supabase
         .from("documents")
         .select("user_id, created_at, institution");
@@ -294,11 +329,11 @@ function AdminPage() {
         });
       }
 
-      const userMap: Record<string, { id: string; email: string; name: string; role: string; institution: string; docCount: number; createdAt: string; status: string }> = {};
+      const userMap: Record<string, any> = {};
 
       if (profiles && profiles.length > 0) {
         profiles.forEach((p: any) => {
-          const isAdminRole = p.role === "admin" || p.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          const isAdminRole = p.role === "admin" || isAdminEmail(p.email);
           userMap[p.id] = {
             id: p.id,
             email: p.email,
@@ -309,38 +344,6 @@ function AdminPage() {
             createdAt: p.created_at || new Date().toISOString(),
             status: isAdminRole ? "admin" : "active",
           };
-        });
-      } else {
-        // System Admin fallback entry if profiles table is empty or loading
-        userMap["admin-master-001"] = {
-          id: "admin-master-001",
-          email: ADMIN_EMAIL,
-          name: "Phil (Platform Administrator)",
-          role: "System Admin",
-          institution: "COLTECH / UBa",
-          docCount: docsData ? docsData.length : 0,
-          createdAt: "2026-08-01T08:00:00Z",
-          status: "admin",
-        };
-      }
-
-      // Aggregate any doc user_ids not explicitly in profiles map
-      if (docsData && docsData.length > 0) {
-        docsData.forEach((d: any) => {
-          const uid = d.user_id;
-          if (uid && uid !== "anonymous" && !userMap[uid]) {
-            const instStr = typeof d.institution === "object" ? d.institution?.university || d.institution?.school : "University of Bamenda";
-            userMap[uid] = {
-              id: uid,
-              email: `user-${uid.substring(0, 8)}@acadformat.org`,
-              name: `Scholar (${uid.substring(0, 6)})`,
-              role: "Registered Scholar",
-              institution: instStr || "Academic Institution",
-              docCount: docCountMap[uid] || 1,
-              createdAt: d.created_at || new Date().toISOString(),
-              status: "active",
-            };
-          }
         });
       }
 
@@ -354,23 +357,41 @@ function AdminPage() {
 
   const handleToggleApprove = async (review: ReviewItem) => {
     const newStatus = review.status === "approved" ? "pending" : "approved";
-    await updateReviewStatusAdmin(review.id, { status: newStatus });
-    toast.success(`Review set to ${newStatus}.`);
-    loadReviews();
+    try {
+      await updateReviewAdminFn({ data: { id: review.id, updates: { status: newStatus } } }).catch(async () => {
+        await updateReviewStatusAdmin(review.id, { status: newStatus });
+      });
+      toast.success(`Review set to ${newStatus}.`);
+      loadReviews();
+    } catch (err) {
+      toast.error("Failed to update review status.");
+    }
   };
 
   const handleToggleFeature = async (review: ReviewItem) => {
     const newFeatured = !review.is_featured;
-    await updateReviewStatusAdmin(review.id, { is_featured: newFeatured });
-    toast.success(newFeatured ? "Review featured on public page!" : "Review unfeatured.");
-    loadReviews();
+    try {
+      await updateReviewAdminFn({ data: { id: review.id, updates: { is_featured: newFeatured } } }).catch(async () => {
+        await updateReviewStatusAdmin(review.id, { is_featured: newFeatured });
+      });
+      toast.success(newFeatured ? "Review featured on public page!" : "Review unfeatured.");
+      loadReviews();
+    } catch (err) {
+      toast.error("Failed to update review.");
+    }
   };
 
   const handleDeleteReview = async (id: string) => {
     if (!confirm("Are you sure you want to delete this review?")) return;
-    await deleteReviewAdmin(id);
-    toast.success("Review deleted successfully.");
-    loadReviews();
+    try {
+      await deleteReviewAdminFn({ data: { id } }).catch(async () => {
+        await deleteReviewAdmin(id);
+      });
+      toast.success("Review deleted successfully.");
+      loadReviews();
+    } catch (err) {
+      toast.error("Failed to delete review.");
+    }
   };
 
   const handleAddAdminReview = async (e: React.FormEvent) => {
