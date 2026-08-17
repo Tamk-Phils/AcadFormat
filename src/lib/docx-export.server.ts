@@ -382,7 +382,7 @@ function renderPage(
         const bold = block.bold === true || (block.level === 1);
         elements.push(
           new Paragraph({
-            spacing: { line: 360, before: 120, after: 120 },
+            spacing: { line: 260, before: 20, after: 20 },
             ...(indent > 0 ? { indent: { left: indent } } : {}),
             ...(right
               ? {

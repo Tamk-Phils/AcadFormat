@@ -357,7 +357,7 @@ export async function buildPdf(
         const isBold = block.bold === true || block.level === 1;
         const font = isBold ? bold : regular;
 
-        y -= 6;
+        y -= 1;
         const indentWidth = Math.max(0, (block.level ?? 1) - 1) * 20;
 
         if (!right) {
@@ -390,7 +390,7 @@ export async function buildPdf(
             y -= leading;
           }
         }
-        y -= 6;
+        y -= 1;
       } else if (block.type === "table") {
         const rows = parseTableRows(block);
 

@@ -61,7 +61,7 @@ function roman(n: number): string {
 }
 
 const CHAPTER_PREFIX =
-  /^\s*chapter\s+(?:[ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[:.\-–—]?\s*/i;
+  /^\s*(?:chapter|task|part)\s+(?:[ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[:.\-–—]?\s*/i;
 const NUMBER_PREFIX = /^\s*\d+(?:\.\d+)*[.)]?\s+/;
 
 /**
@@ -265,19 +265,27 @@ function isOriginalCaption(line: string, chapter?: any): boolean {
   return false;
 }
 
-function isOriginalSectionTitle(line: string, chapter?: any): boolean {
-  if (!chapter) return false;
-  const cleanedLine = line.toLowerCase().replace(/[^a-z0-9]/g, "");
+function isOriginalSectionTitle(line: string, chapter?: any, allChapters?: any[]): boolean {
+  if (!line) return false;
+  const rawClean = cleanTitle(line).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const directClean = line.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!rawClean && !directClean) return false;
 
-  const cleanedChapterTitle = chapter.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (cleanedChapterTitle && (cleanedLine === cleanedChapterTitle || cleanedLine.includes(cleanedChapterTitle))) {
-    return true;
-  }
+  const chaptersToCheck = allChapters && allChapters.length > 0 ? allChapters : (chapter ? [chapter] : []);
 
-  for (const sec of chapter.sections || []) {
-    const cleanedTitle = sec.title.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (cleanedTitle && (cleanedLine === cleanedTitle || cleanedLine.includes(cleanedTitle) || cleanedTitle.includes(cleanedLine))) {
-      return true;
+  for (const ch of chaptersToCheck) {
+    const chClean = cleanTitle(ch.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (chClean) {
+      if (rawClean === chClean || rawClean.includes(chClean) || chClean.includes(rawClean)) return true;
+      if (directClean === chClean || directClean.includes(chClean) || chClean.includes(directClean)) return true;
+    }
+
+    for (const sec of ch.sections || []) {
+      const secClean = cleanTitle(sec.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (secClean) {
+        if (rawClean === secClean || rawClean.includes(secClean) || secClean.includes(rawClean)) return true;
+        if (directClean === secClean || directClean.includes(secClean) || secClean.includes(directClean)) return true;
+      }
     }
   }
 
@@ -306,7 +314,7 @@ function cleanDept(dept: string): string {
   return (dept || "").replace(/^department\s+of\s+/i, "").trim();
 }
 
-function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any): Block[] {
+function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any, allChapters?: any[]): Block[] {
   const blocks: Block[] = [];
   const textStr = typeof content === "string" ? content : String(content ?? "");
   const rawLines = textStr.split("\n");
@@ -496,21 +504,18 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     } else {
       if (inTable) flushTable();
 
-      if (isStrayHeading(line)) {
+      if (isOriginalSectionTitle(line, chapter, allChapters)) {
         flushPara();
         hasEmptyLine = false;
-        if (isOriginalSectionTitle(line, chapter)) {
-          continue;
-        }
-        blocks.push({ type: "heading2", text: line });
+        continue;
       } else if (isOriginalCaption(line, chapter)) {
         flushPara();
         hasEmptyLine = false;
         continue;
-      } else if (isOriginalSectionTitle(line, chapter)) {
+      } else if (isStrayHeading(line)) {
         flushPara();
         hasEmptyLine = false;
-        continue;
+        blocks.push({ type: "heading2", text: line });
       } else {
         const isListItem = LIST_ITEM_REGEX.test(line);
         const wasListItem = pendingPara.length > 0 && LIST_ITEM_REGEX.test(pendingPara[0]!);
@@ -750,7 +755,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       { type: "heading1", text: `CHAPTER ${chapterNumber}: ${chapterTitle.toUpperCase()}` },
     ];
 
-    const introBlocks = parseSectionContent(chapter.intro || "", model.images ?? [], chapter);
+    const introBlocks = parseSectionContent(chapter.intro || "", model.images ?? [], chapter, model?.chapters);
     rawBlocks.push(...introBlocks);
 
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
@@ -760,7 +765,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       sectionPageMarks.push({ title: `${number} ${sectionTitle}`, blockIndex: rawBlocks.length });
       rawBlocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
 
-      const sectionBlocks = parseSectionContent(section.content, model.images ?? [], chapter);
+      const sectionBlocks = parseSectionContent(section.content, model.images ?? [], chapter, model?.chapters);
       rawBlocks.push(...sectionBlocks);
     });
 
@@ -1224,7 +1229,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       continue;
     }
 
-    const existing = model.preliminary.find((p) => p.type === type);
+    const existing = (model?.preliminary || []).find((p) => p.type === type);
     const content = existing?.content?.trim();
 
     if (isUba && isFinalYearWork) {
