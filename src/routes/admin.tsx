@@ -112,10 +112,15 @@ function AdminPage() {
           setIsAuthenticated(true);
           loadDashboardData();
           return;
+        } else {
+          // Logged in user is NOT an admin: strictly revoke admin access & clear stale key
+          localStorage.removeItem(ADMIN_SESSION_KEY);
+          setIsAuthenticated(false);
+          return;
         }
       }
 
-      // 2. Check local admin session key as fallback
+      // Guest / unauthenticated fallback check
       const saved = localStorage.getItem(ADMIN_SESSION_KEY);
       if (saved === "true") {
         setIsAuthenticated(true);

@@ -31,7 +31,14 @@ export function SiteHeader({ user }: { user?: User | null }) {
           setIsAdmin(true);
           return;
         }
+
+        // Active user is NOT an admin - strip admin state and local session override
+        localStorage.removeItem(ADMIN_SESSION_KEY);
+        setIsAdmin(false);
+        return;
       }
+
+      // Guest / unauthenticated fallback
       const saved = localStorage.getItem(ADMIN_SESSION_KEY) === "true";
       setIsAdmin(saved);
     }
