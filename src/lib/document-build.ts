@@ -330,13 +330,19 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
 
   const flushPara = () => {
     if (pendingPara.length === 0) return;
-    blocks.push({ type: "para", text: pendingPara.join(" ") });
+    const text = pendingPara.join(" ").trim();
+    if (text) {
+      blocks.push({ type: "para", text });
+    }
     pendingPara = [];
   };
 
   const flushCode = () => {
     if (pendingCode.length === 0) return;
-    blocks.push({ type: "code", text: pendingCode.join("\n") });
+    const text = pendingCode.join("\n").trim();
+    if (text) {
+      blocks.push({ type: "code", text });
+    }
     pendingCode = [];
   };
 
@@ -530,38 +536,50 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   return blocks;
 }
 
-/** Split blocks into page-sized chunks using an accurate page-height budget. */
+/** Split blocks into page-sized chunks using an accurate page-height budget in PDF points (648pt printable height). */
 function chunkBlocks(blocks: Block[]): Block[][] {
   const pages: Block[][] = [];
   let current: Block[] = [];
   let used = 0;
-  const PAGE_BUDGET = 2100;
+  // Standard A4/Letter page height = 792pt. Margins top=72pt, bottom=72pt.
+  // Printable content height per page = 648pt.
+  const PAGE_BUDGET = 648;
 
   for (const block of blocks) {
     let weight = 0;
+    const textLen = (block.text || "").length;
+
     if (block.type === "heading1") {
-      weight = 380;
+      const lines = Math.ceil(Math.max(1, textLen) / 45);
+      weight = lines * 24 + 16;
     } else if (block.type === "heading2") {
-      weight = 240;
+      const lines = Math.ceil(Math.max(1, textLen) / 55);
+      weight = lines * 20 + 12;
     } else if (block.type === "image") {
-      weight = 950;
+      weight = block.imageId?.includes("logo") ? 82 : 220;
     } else if (block.type === "logos") {
-      weight = 400;
+      weight = 82;
+    } else if (block.type === "title") {
+      const lines = Math.ceil(Math.max(1, textLen) / 45);
+      weight = lines * 24 + 30;
     } else if (block.type === "table") {
       const rows = parseTableRows(block);
       const rCount = Math.max(1, rows.length);
-      weight = Math.max(250, rCount * 95 + 80);
+      weight = rCount * 20 + 24;
     } else if (block.type === "code") {
       const lCount = Math.max(1, (block.text || "").split("\n").length);
-      weight = Math.max(180, lCount * 60 + 100);
+      weight = lCount * 13 + 18;
     } else if (block.type === "bilingual" || block.type === "ubaHeader") {
-      weight = 600;
+      weight = 110;
     } else if (block.type === "spacer") {
-      weight = 80;
+      weight = 18;
+    } else if (block.type === "caption") {
+      const lines = Math.ceil(Math.max(1, textLen) / 65);
+      weight = lines * 15 + 6;
     } else {
-      const textLen = (block.text || "").length;
-      const lines = Math.ceil(Math.max(1, textLen) / 68);
-      weight = lines * 70 + 35;
+      // Paragraph, center, listline
+      const lines = Math.ceil(Math.max(1, textLen) / 72);
+      weight = lines * 18 + 6;
     }
 
     if (used + weight > PAGE_BUDGET && current.length > 0) {
@@ -573,6 +591,7 @@ function chunkBlocks(blocks: Block[]): Block[][] {
     used += weight;
   }
   if (current.length > 0) pages.push(current);
+
   // Never leave a heading orphaned as the last line of a page.
   for (let i = 0; i < pages.length - 1; i += 1) {
     const page = pages[i]!;

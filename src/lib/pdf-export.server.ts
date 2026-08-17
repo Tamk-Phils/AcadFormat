@@ -123,6 +123,7 @@ export async function buildPdf(
       text: string,
       options: { font: PDFFont; size: number; align?: "left" | "center" | "justify" },
     ) => {
+      if (!text || !text.trim()) return;
       const lines = wrap(sanitize(text), options.font, options.size, contentWidth);
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i] || "";
@@ -150,7 +151,7 @@ export async function buildPdf(
 
     for (const block of page.blocks) {
       if (block.type === "spacer") {
-        y -= leading;
+        y -= Math.min(leading, 12);
         continue;
       }
       if (block.type === "bilingual") {
