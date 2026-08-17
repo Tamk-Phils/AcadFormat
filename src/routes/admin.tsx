@@ -92,7 +92,30 @@ function AdminPage() {
 
   useEffect(() => {
     const checkAdminSession = async () => {
-      // 1. First check if local admin session key exists
+      // 1. Check if active Supabase session user is admin via Database profiles table
+      const { data } = await supabase.auth.getUser();
+      const currentUser = data?.user;
+
+      if (currentUser) {
+        // Query database role from profiles table
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+
+        const isDbAdmin = profile?.role === "admin";
+        const isEmailAdmin = currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+        if (isDbAdmin || isEmailAdmin) {
+          localStorage.setItem(ADMIN_SESSION_KEY, "true");
+          setIsAuthenticated(true);
+          loadDashboardData();
+          return;
+        }
+      }
+
+      // 2. Check local admin session key as fallback
       const saved = localStorage.getItem(ADMIN_SESSION_KEY);
       if (saved === "true") {
         setIsAuthenticated(true);
@@ -100,17 +123,7 @@ function AdminPage() {
         return;
       }
 
-      // 2. Check if active Supabase session user is admin
-      const { data } = await supabase.auth.getUser();
-      const currentUser = data?.user;
-
-      if (currentUser && currentUser.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        localStorage.setItem(ADMIN_SESSION_KEY, "true");
-        setIsAuthenticated(true);
-        loadDashboardData();
-      } else {
-        setIsAuthenticated(false);
-      }
+      setIsAuthenticated(false);
     };
 
     checkAdminSession();
@@ -123,6 +136,36 @@ function AdminPage() {
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPassword = passwordInput.trim();
 
+    // 1. Attempt Supabase Auth login
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (!error && data?.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        const isDbAdmin = profile?.role === "admin";
+        const isEmailAdmin = data.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+        if (isDbAdmin || isEmailAdmin) {
+          localStorage.setItem(ADMIN_SESSION_KEY, "true");
+          setIsAuthenticated(true);
+          toast.success("Welcome, Admin! Authenticated successfully via database.");
+          loadDashboardData();
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Supabase admin auth check error:", err);
+    }
+
+    // 2. Fallback local admin check
     const isEmailMatch = cleanEmail === ADMIN_EMAIL.toLowerCase();
     const isPassMatch = cleanPassword === ADMIN_PASS || cleanPassword.toLowerCase() === ADMIN_PASS.toLowerCase();
 
@@ -132,23 +175,6 @@ function AdminPage() {
       toast.success("Welcome, Admin! Authenticated successfully.");
       loadDashboardData();
       return;
-    }
-
-    // Try Supabase auth fallback
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
-      if (!error && data?.user) {
-        localStorage.setItem(ADMIN_SESSION_KEY, "true");
-        setIsAuthenticated(true);
-        toast.success("Authenticated successfully.");
-        loadDashboardData();
-        return;
-      }
-    } catch (err) {
-      // Ignore
     }
 
     setLoginError("Invalid email or password. Please verify admin credentials.");
@@ -162,6 +188,7 @@ function AdminPage() {
 
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_SESSION_KEY);
+    supabase.auth.signOut().catch(() => {});
     setIsAuthenticated(false);
     setEmailInput("");
     setPasswordInput("");

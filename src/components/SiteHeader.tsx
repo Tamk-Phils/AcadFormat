@@ -16,14 +16,24 @@ export function SiteHeader({ user }: { user?: User | null }) {
 
   useEffect(() => {
     async function evaluateAdmin(u: User | null) {
-      const saved = localStorage.getItem(ADMIN_SESSION_KEY) === "true";
-      if (saved) {
-        setIsAdmin(true);
-      } else if (u && u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
+      if (u) {
+        if (u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          setIsAdmin(true);
+          return;
+        }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", u.id)
+          .maybeSingle();
+
+        if (profile?.role === "admin") {
+          setIsAdmin(true);
+          return;
+        }
       }
+      const saved = localStorage.getItem(ADMIN_SESSION_KEY) === "true";
+      setIsAdmin(saved);
     }
 
     if (user !== undefined) {
