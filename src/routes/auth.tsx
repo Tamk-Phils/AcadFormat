@@ -31,8 +31,15 @@ function AuthPage() {
   const [googleBusy, setGoogleBusy] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.warn("Clearing stale auth session:", error.message);
+        supabase.auth.signOut().catch(() => {});
+        return;
+      }
       if (data.session) navigate({ to: "/dashboard", replace: true });
+    }).catch(() => {
+      supabase.auth.signOut().catch(() => {});
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -67,8 +74,19 @@ function AuthPage() {
         if (error) throw error;
       }
       navigate({ to: "/dashboard", replace: true });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Authentication failed.");
+    } catch (error: any) {
+      const errMsg = error?.message || "Authentication failed.";
+      if (errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("jwt")) {
+        // Purge old local storage keys from previous project
+        if (typeof window !== "undefined") {
+          localStorage.clear();
+        }
+        toast.error("Session updated. Please try signing in again.");
+      } else if (errMsg.toLowerCase().includes("rate limit")) {
+        toast.error("Email send limit reached. Please check your inbox or disable email confirmation in Supabase.");
+      } else {
+        toast.error(errMsg);
+      }
     } finally {
       setBusy(false);
     }
