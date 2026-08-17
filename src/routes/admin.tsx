@@ -243,66 +243,98 @@ function AdminPage() {
     }
   };
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Real-time subscription to database changes across profiles, documents, and reviews
+    const channel = supabase
+      .channel("admin-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+        loadUsers();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () => {
+        loadDocuments();
+        loadUsers();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, () => {
+        loadReviews();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated]);
+
   const loadUsers = async () => {
     setLoadingUsers(true);
     try {
-      // Query real documents grouped by user_id
+      // 1. Query all real profiles from database
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      // 2. Query documents to calculate per-user document count
       const { data: docsData } = await supabase
         .from("documents")
         .select("user_id, created_at, institution");
 
-      // Query active session user if present
-      const { data: authData } = await supabase.auth.getUser();
-      const currentUser = authData?.user;
+      const docCountMap: Record<string, number> = {};
+      if (docsData) {
+        docsData.forEach((d: any) => {
+          if (d.user_id) {
+            docCountMap[d.user_id] = (docCountMap[d.user_id] || 0) + 1;
+          }
+        });
+      }
 
       const userMap: Record<string, { id: string; email: string; name: string; role: string; institution: string; docCount: number; createdAt: string; status: string }> = {};
 
-      // System Admin entry
-      userMap["admin-master-001"] = {
-        id: "admin-master-001",
-        email: ADMIN_EMAIL,
-        name: "Phil (Platform Administrator)",
-        role: "System Admin",
-        institution: "COLTECH / UBa",
-        docCount: docsData ? docsData.length : 0,
-        createdAt: "2026-08-01T08:00:00Z",
-        status: "admin",
-      };
-
-      // Active session user
-      if (currentUser && currentUser.email !== ADMIN_EMAIL) {
-        userMap[currentUser.id] = {
-          id: currentUser.id,
-          email: currentUser.email || `user-${currentUser.id.substring(0, 8)}@acadformat.org`,
-          name: currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || `Scholar (${currentUser.id.substring(0, 6)})`,
-          role: "Registered User",
-          institution: "University of Bamenda",
-          docCount: docsData ? docsData.filter((d: any) => d.user_id === currentUser.id).length : 0,
-          createdAt: currentUser.created_at || new Date().toISOString(),
-          status: "active",
+      if (profiles && profiles.length > 0) {
+        profiles.forEach((p: any) => {
+          const isAdminRole = p.role === "admin" || p.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          userMap[p.id] = {
+            id: p.id,
+            email: p.email,
+            name: p.full_name || (isAdminRole ? "Phil (Platform Administrator)" : `Scholar (${p.id.substring(0, 6)})`),
+            role: isAdminRole ? "System Admin" : "Registered User",
+            institution: p.institution || "University of Bamenda",
+            docCount: docCountMap[p.id] || 0,
+            createdAt: p.created_at || new Date().toISOString(),
+            status: isAdminRole ? "admin" : "active",
+          };
+        });
+      } else {
+        // System Admin fallback entry if profiles table is empty or loading
+        userMap["admin-master-001"] = {
+          id: "admin-master-001",
+          email: ADMIN_EMAIL,
+          name: "Phil (Platform Administrator)",
+          role: "System Admin",
+          institution: "COLTECH / UBa",
+          docCount: docsData ? docsData.length : 0,
+          createdAt: "2026-08-01T08:00:00Z",
+          status: "admin",
         };
       }
 
-      // Aggregate all real user IDs from uploaded documents
+      // Aggregate any doc user_ids not explicitly in profiles map
       if (docsData && docsData.length > 0) {
         docsData.forEach((d: any) => {
           const uid = d.user_id;
-          if (uid && uid !== "anonymous") {
-            if (!userMap[uid]) {
-              const instStr = typeof d.institution === "object" ? d.institution?.university || d.institution?.school : "University of Bamenda";
-              userMap[uid] = {
-                id: uid,
-                email: `user-${uid.substring(0, 8)}@acadformat.org`,
-                name: `Scholar (${uid.substring(0, 6)})`,
-                role: "Registered Scholar",
-                institution: instStr || "Academic Institution",
-                docCount: 1,
-                createdAt: d.created_at || new Date().toISOString(),
-                status: "active",
-              };
-            } else {
-              userMap[uid].docCount += 1;
-            }
+          if (uid && uid !== "anonymous" && !userMap[uid]) {
+            const instStr = typeof d.institution === "object" ? d.institution?.university || d.institution?.school : "University of Bamenda";
+            userMap[uid] = {
+              id: uid,
+              email: `user-${uid.substring(0, 8)}@acadformat.org`,
+              name: `Scholar (${uid.substring(0, 6)})`,
+              role: "Registered Scholar",
+              institution: instStr || "Academic Institution",
+              docCount: docCountMap[uid] || 1,
+              createdAt: d.created_at || new Date().toISOString(),
+              status: "active",
+            };
           }
         });
       }

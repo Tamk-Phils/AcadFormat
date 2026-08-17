@@ -335,5 +335,19 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
+-- 10. REALTIME PUBLICATION CONFIGURATION
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles, public.documents, public.reviews;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Ignore if table already in publication
+    NULL;
+END $$;
+
+-- ----------------------------------------------------------------------------
 -- END OF SCHEMA
 -- ----------------------------------------------------------------------------
