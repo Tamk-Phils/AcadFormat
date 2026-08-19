@@ -303,7 +303,7 @@ function isOriginalSectionTitle(line: string, chapter?: any, allChapters?: any[]
 
 const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•";
 const BULLET_SPLIT_REGEX = new RegExp(`\\s*(?=[${BULLET_CHARS}])`);
-const LIST_ITEM_REGEX = /^\s*(?:[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*|[a-zA-Z0-9]+[.)]\s+)/;
+const LIST_ITEM_REGEX = /^\s*(?:[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*|[a-zA-Z0-9]+[.)]\s+|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\)\s*|(?:Data Ingestion Layer|Feature Extraction Layer|Detection Engine Layer|Decision and Alerting Layer|Presentation Layer|Programming and modelling:|NLP processing:|Service architecture:|Dashboard:|Version control and documentation:))/i;
 
 function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: boolean): boolean {
   const prev = prevLine.trim();
@@ -332,9 +332,13 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     // Pre-split inline [IMAGE:...] markers so they become standalone line items
     const imageChunks = rawLine.split(/(?=\[IMAGE(?::\d+)?\])|(?<=\[IMAGE(?::\d+)?\])/i);
     imageChunks.forEach((chunk) => {
-      const parts = chunk.split(BULLET_SPLIT_REGEX);
-      parts.forEach((part) => {
-        if (part.trim()) lines.push(part.trim());
+      // Split inline list/layer markers like (i)... (ii)... (iii)... or Layer Name:
+      const listSplit = chunk.split(/(?=\b(?:Data Ingestion Layer|Feature Extraction Layer|Detection Engine Layer|Decision and Alerting Layer|Presentation Layer|Programming and modelling:|NLP processing:|Service architecture:|Dashboard:|Version control and documentation:|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\))\s*)/i);
+      listSplit.forEach((sub) => {
+        const parts = sub.split(BULLET_SPLIT_REGEX);
+        parts.forEach((part) => {
+          if (part.trim()) lines.push(part.trim());
+        });
       });
     });
   });
@@ -527,19 +531,21 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         blocks.push({ type: "heading2", text: line });
       } else {
         const isListItem = LIST_ITEM_REGEX.test(line);
-        const wasListItem = pendingPara.length > 0 && LIST_ITEM_REGEX.test(pendingPara[0]!);
-        
-        if (isListItem || (wasListItem && !isListItem)) {
+        if (isListItem) {
           flushPara();
-        } else if (pendingPara.length > 0) {
-          const prevLine = pendingPara[pendingPara.length - 1]!;
-          const shouldMergeLines = shouldMerge(prevLine, line, hasEmptyLine);
-          if (!shouldMergeLines) {
-            flushPara();
+          blocks.push({ type: "bullet", text: line });
+          hasEmptyLine = false;
+        } else {
+          if (pendingPara.length > 0) {
+            const prevLine = pendingPara[pendingPara.length - 1]!;
+            const shouldMergeLines = shouldMerge(prevLine, line, hasEmptyLine);
+            if (!shouldMergeLines) {
+              flushPara();
+            }
           }
+          pendingPara.push(line);
+          hasEmptyLine = false;
         }
-        pendingPara.push(line);
-        hasEmptyLine = false;
       }
     }
   }

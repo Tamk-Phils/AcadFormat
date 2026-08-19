@@ -621,7 +621,7 @@ ${input.text.slice(0, MAX_CHARS)}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (response.status === 429) {

@@ -461,14 +461,40 @@ function renderPage(
         });
         break;
       }
-      default:
+      case "bullet": {
+        const cleanText = (block.text || "").replace(/^\s*[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*/, "").trim();
         elements.push(
           new Paragraph({
-            alignment: AlignmentType.JUSTIFIED,
-            spacing,
-            children: [new TextRun({ ...common, text: block.text })],
-          }),
+            bullet: { level: 0 },
+            indent: { left: 480 },
+            spacing: { before: 40, after: 40, line: Math.round(config.lineSpacing * 240) },
+            children: [new TextRun({ ...common, text: cleanText || block.text })],
+          })
         );
+        break;
+      }
+      default: {
+        const isBulletLine = /^\s*[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s+/.test(block.text || "");
+        if (isBulletLine) {
+          const cleanText = (block.text || "").replace(/^\s*[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*/, "").trim();
+          elements.push(
+            new Paragraph({
+              bullet: { level: 0 },
+              indent: { left: 480 },
+              spacing: { before: 40, after: 40, line: Math.round(config.lineSpacing * 240) },
+              children: [new TextRun({ ...common, text: cleanText })],
+            })
+          );
+        } else {
+          elements.push(
+            new Paragraph({
+              alignment: AlignmentType.JUSTIFIED,
+              spacing,
+              children: [new TextRun({ ...common, text: block.text })],
+            })
+          );
+        }
+      }
     }
   });
 

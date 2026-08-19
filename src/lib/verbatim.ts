@@ -27,17 +27,22 @@ export function restoreVerbatimContent(model: DocumentModel, sourceText: string)
     }
   }
 
-  const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
-  const locate = (marker?: string, from = 0) => {
-    const needle = normalize(marker || "");
-    if (needle.length < 12) return -1;
-    let at = normalized.indexOf(needle, from);
-    if (at < 0) {
-      const shorter = needle.split(" ").slice(0, 6).join(" ");
-      if (shorter.length < 12) return -1;
-      at = normalized.indexOf(shorter, from);
+  const normalize = (value: string) => (value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const locate = (marker?: string, title?: string, contentSample?: string, from = 0) => {
+    const searchTerms = [marker, title, contentSample].filter(Boolean);
+    for (const rawTerm of searchTerms) {
+      const needle = normalize(rawTerm || "");
+      if (needle.length >= 8) {
+        let at = normalized.indexOf(needle, from);
+        if (at >= 0) return at;
+        const shorter = needle.split(" ").slice(0, 4).join(" ");
+        if (shorter.length >= 6) {
+          at = normalized.indexOf(shorter, from);
+          if (at >= 0) return at;
+        }
+      }
     }
-    return at;
+    return -1;
   };
 
   type Anchor = { chapter: number; section: number; start: number };
@@ -45,7 +50,7 @@ export function restoreVerbatimContent(model: DocumentModel, sourceText: string)
   let cursor = 0;
   model.chapters.forEach((chapter, chapterIndex) => {
     chapter.sections.forEach((section, sectionIndex) => {
-      const at = locate(section.startMarker || section.content.slice(0, 90), cursor);
+      const at = locate(section.startMarker, section.title, section.content?.slice(0, 90), cursor);
       if (at >= 0) {
         anchors.push({ chapter: chapterIndex, section: sectionIndex, start: at });
         cursor = at + 1;
