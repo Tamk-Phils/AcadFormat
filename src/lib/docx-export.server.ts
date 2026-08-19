@@ -353,6 +353,7 @@ function renderPage(
         elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
+            pageBreakBefore: elements.length > 0,
             spacing: { before: 240, after: 80, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true, size: size + 4 })],
           }),

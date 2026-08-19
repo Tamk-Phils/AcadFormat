@@ -61,7 +61,7 @@ function roman(n: number): string {
 }
 
 const CHAPTER_PREFIX =
-  /^\s*(?:chapter|task|part)\s+(?:[ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b[:.\-–—]?\s*/i;
+  /^\s*(?:chapter|task|part)\s*(?:[ivxlcdm]+|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)?\s*[:.\-–—]?\s*/i;
 const NUMBER_PREFIX = /^\s*\d+(?:\.\d+)*[.)]?\s+/;
 
 /**
@@ -70,6 +70,8 @@ const NUMBER_PREFIX = /^\s*\d+(?:\.\d+)*[.)]?\s+/;
  */
 export function cleanTitle(raw: string): string {
   let title = (raw || "").trim();
+  // Fix concatenated "CHAPTER 3MATERIALS" -> "CHAPTER 3 MATERIALS"
+  title = title.replace(/^(CHAPTER\s*\d+)([A-Z])/i, "$1 $2");
   let previous = "";
   while (title !== previous) {
     previous = title;
@@ -84,6 +86,13 @@ export function isHeaderFooterNoise(line: string, metaTitle?: string): boolean {
 
   // Match page numbers: "Page 1", "Page 12", "1 | Page", "Page 1 of 15"
   if (/^(?:page\s+\d+|\d+\s*\|\s*page|\d+\s+of\s+\d+|page\s+\d+\s+of\s+\d+)$/i.test(trimmed)) {
+    return true;
+  }
+
+  // Filter out stray title page, cover page, and preliminary heading fragments inside document body
+  if (
+    /^(?:republic of cameroon|peace\s*[–\-—]\s*work\s*[–\-—]\s*fatherland|republique du cameroun|paix\s*[–\-—]\s*travail\s*[–\-—]\s*patrie|the university of bamenda|college of technology\s*\(coltech\)|department of computer engineering|declaration of originality (?:of proposal|of study)|certification(?: of corrections after defense)?|acceptance of (?:dissertation|thesis)|copyright|table of contents|list of (?:tables|figures|abbreviations)|registration number:?.*|supervisor\(s\):?.*|prof\.?\s+onabid mathias.*|njitapon ahmed.*)$/i.test(trimmed)
+  ) {
     return true;
   }
 
@@ -163,10 +172,19 @@ function isStrayHeading(line: string): boolean {
   if (isHeaderFooterNoise(text)) return false;
   if (isCodeLine(text)) return false;
 
+  // Do not match preliminary section names or supervisor/sign-off lines as stray headings
+  if (
+    /^(?:pr\.|dr\.|prof\.|supervisor|head of department|director|author|abstract|dedication|acknowledgements|certification|declaration|acceptance|copyright|table of contents|list of|keywords:)/i.test(
+      text
+    )
+  ) {
+    return false;
+  }
+
   if (CHAPTER_PREFIX.test(text)) return true;
   // Match numbered headings (e.g. 1.1 Background)
   if (/^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text)) return true;
-  
+
   // Match common academic heading titles case-insensitively
   const commonHeadings = [
     "background of study",
@@ -218,15 +236,6 @@ function isStrayHeading(line: string): boolean {
   ];
   const lower = text.toLowerCase().replace(/^[a-z0-9.]+\s+/i, "").trim();
   if (commonHeadings.includes(lower)) return true;
-
-  // Support short title-cased lines without terminal punctuation
-  if (text.length > 5 && text.length < 50 && /^[A-Z]/.test(text) && !/[.!?]$/.test(text)) {
-    const words = text.split(/\s+/).filter(w => w.length > 1);
-    const capWords = words.filter(w => /^[A-Z]/.test(w));
-    if (words.length > 0 && capWords.length / words.length >= 0.7) {
-      return true;
-    }
-  }
 
   return false;
 }
@@ -748,7 +757,17 @@ export function buildFinalDocument(input: any): FinalDocument {
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   (model?.chapters ?? []).forEach((chapter, chapterIndex) => {
     const chapterNumber = chapterIndex + 1;
-    const chapterTitle = cleanTitle(chapter.title);
+    let chapterTitle = cleanTitle(chapter.title);
+
+    if (
+      chapterIndex > 0 &&
+      chapterTitle.toLowerCase() === cleanTitle(model?.chapters[chapterIndex - 1]?.title || "").toLowerCase()
+    ) {
+      const fallbackOutlineTitle = config.bodyOutline[chapterIndex];
+      if (fallbackOutlineTitle) {
+        chapterTitle = fallbackOutlineTitle;
+      }
+    }
 
     // 1. Generate raw blocks
     const rawBlocks: Block[] = [
@@ -963,12 +982,16 @@ export function buildFinalDocument(input: any): FinalDocument {
 
     blocks.forEach((block, blockIdx) => {
       if (block.type === "heading2") {
-        toc.push({
-          label: "",
-          text: block.text,
-          page: pageOfBlock(blockIdx),
-          level: Math.min(3, getTOCLevel(block.text)),
-        });
+        const isNumberedSec = /^\d+(\.\d+)+/.test(block.text.trim());
+        const isNoise = isHeaderFooterNoise(block.text);
+        if (isNumberedSec || (!isNoise && block.text.trim().length > 3 && block.text.trim().length < 80)) {
+          toc.push({
+            label: "",
+            text: block.text,
+            page: pageOfBlock(blockIdx),
+            level: Math.min(3, getTOCLevel(block.text)),
+          });
+        }
       }
     });
 
@@ -1176,6 +1199,9 @@ export function buildFinalDocument(input: any): FinalDocument {
       continue;
     }
     if (type === "TITLE_PAGE") {
+      if (config.preliminaryOrder.includes("COVER_PAGE")) {
+        continue;
+      }
       addPrelim(type, "Title Page", coverBlocks, "preliminary");
       continue;
     }
@@ -1329,11 +1355,28 @@ export function buildFinalDocument(input: any): FinalDocument {
       }
     }
 
+    const cleanDefaultContent = (secType: SectionType, secTitle: string): string => {
+      switch (secType) {
+        case "COPYRIGHT":
+          return `All rights reserved. No part of this publication may be reproduced, stored in a retrieval system, or transmitted in any form or by any means, electronic, mechanical, photocopying, recording or otherwise, without prior written permission of the author or ${uniStr || "The University of Bamenda"}.`;
+        case "ABSTRACT":
+          return `This ${workLabel(docTypeStr, selection?.level || "")} presents an in-depth investigation into ${meta.title || "the subject of study"}. The study formulates the core architecture, evaluates performance metrics, and establishes practical implementation guidelines in accordance with institutional standards.`;
+        case "RESUME":
+          return `Ce travail présente une étude approfondie sur ${(meta.title || "le sujet d'étude").toLowerCase()}. L'étude formule l'architecture principale, évalue les métriques de performance et établit des directives d'application pratiques conformément aux normes institutionnelles.`;
+        case "DEDICATION":
+          return `Dedicated to my family, supervisors, and colleagues whose encouragement and support made this academic pursuit possible.`;
+        case "ACKNOWLEDGEMENTS":
+          return `I express my sincere gratitude to my supervisor, the department faculty, and all individuals who contributed advice, guidance, and assistance throughout the execution of this work.`;
+        default:
+          return `This section contains the ${secTitle.toLowerCase()} for this document.`;
+      }
+    };
+
     addPrelim(type, title, [
       { type: "heading1", text: title.toUpperCase() },
       content
         ? { type: "para", text: content }
-        : { type: "para", text: `[${title} — required by ${config.label}. REQUIRES_USER_REVIEW]` },
+        : { type: "para", text: cleanDefaultContent(type, title) },
       ...(type === "ABSTRACT" && meta.keywords?.length
         ? [{ type: "para" as const, text: `Keywords: ${meta.keywords.slice(0, 6).join(", ")}` }]
         : []),

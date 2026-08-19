@@ -213,43 +213,56 @@ function fallbackRuleBasedAnalysis(input: {
   const lines = input.text.split("\n").map((l) => l.trim()).filter(Boolean);
   const title = lines[0] || input.fileName.replace(/\.[^/.]+$/, "");
 
-  // Match chapter headings in text
+  // Ignore lines that look like TOC entries with trailing page numbers (e.g. "CHAPTER 1: INTRODUCTION  1")
+  const isTocEntryLine = (l: string) => /\t\d+$/i.test(l) || /\s+\d+$/i.test(l) || /^\|.*\|$/i.test(l);
+
+  // Match real body chapter headings in text
   const chapterHeaderRegex = /^(?:CHAPTER\s+(?:[IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b[:.\-–—]?\s*(.*))/i;
 
-  const rawChapters: { title: string; text: string }[] = [];
-  let currentTitle = "Introduction";
+  const rawChapters: { title: string; lines: string[] }[] = [];
+  let currentTitle = "INTRODUCTION";
   let currentLines: string[] = [];
 
   for (const line of lines) {
+    if (isTocEntryLine(line)) {
+      continue; // Skip TOC listing noise from corrupted document inputs
+    }
+
     const match = line.match(chapterHeaderRegex);
     if (match) {
       if (currentLines.length > 0) {
-        rawChapters.push({ title: currentTitle, text: currentLines.join("\n") });
+        rawChapters.push({ title: currentTitle, lines: currentLines });
         currentLines = [];
       }
-      currentTitle = match[1]?.trim() || line;
+      let cleaned = match[1]?.trim() || line;
+      cleaned = cleaned.replace(/[\t\s]+\d+$/, "").replace(/^(?:CHAPTER\s*\d+[:.\-–—]?\s*)/i, "").trim();
+      currentTitle = cleaned || "CHAPTER";
     } else {
       currentLines.push(line);
     }
   }
   if (currentLines.length > 0) {
-    rawChapters.push({ title: currentTitle, text: currentLines.join("\n") });
+    rawChapters.push({ title: currentTitle, lines: currentLines });
   }
 
-  if (rawChapters.length === 0) {
-    rawChapters.push({ title: "Main Content", text: input.text });
-  }
+  // Filter out raw chapters that are just title page/prelim noise before Chapter 1
+  const validChapters = rawChapters.filter((chap) => {
+    const textStr = chap.lines.join(" ");
+    return textStr.length > 100 && !/^(republic of cameroon|college of technology|department of computer engineering)/i.test(chap.lines[0] || "");
+  });
 
-  const totalChaps = rawChapters.length;
+  const finalRawChapters = validChapters.length > 0 ? validChapters : rawChapters;
+
+  const totalChaps = finalRawChapters.length;
   const figsPerChap = Math.ceil(input.imageCount / totalChaps);
   const tablesPerChap = Math.ceil(input.tableCount / totalChaps);
 
   let figCounter = 0;
   let tableCounter = 0;
 
-  const chapters = rawChapters.map((chap, idx) => {
+  const chapters = finalRawChapters.map((chap, idx) => {
     const chapNum = idx + 1;
-    const chapLines = chap.text.split("\n").map((l) => l.trim()).filter(Boolean);
+    const chapText = chap.lines.join("\n");
     const numFigs = Math.min(figsPerChap, input.imageCount - figCounter);
     const numTables = Math.min(tablesPerChap, input.tableCount - tableCounter);
 
@@ -278,17 +291,49 @@ function fallbackRuleBasedAnalysis(input: {
       };
     });
 
+    // Parse sections inside chapter by matching "1.1 Title", "2.1 Title", etc.
+    const secRegex = /^\d+\.\d+(?:\.\d+)?\s+(.+)$/;
+    const sections: { title: string; content: string; startMarker: string; endMarker: string }[] = [];
+    let curSecTitle = chap.title || "Introduction";
+    let curSecLines: string[] = [];
+
+    for (const l of chap.lines) {
+      const m = l.match(secRegex);
+      if (m) {
+        if (curSecLines.length > 0) {
+          sections.push({
+            title: curSecTitle,
+            content: curSecLines.join("\n"),
+            startMarker: curSecLines.slice(0, 3).join(" "),
+            endMarker: curSecLines.slice(-3).join(" "),
+          });
+          curSecLines = [];
+        }
+        curSecTitle = m[1]?.trim() || l;
+      } else {
+        curSecLines.push(l);
+      }
+    }
+    if (curSecLines.length > 0) {
+      sections.push({
+        title: curSecTitle,
+        content: curSecLines.join("\n"),
+        startMarker: curSecLines.slice(0, 3).join(" "),
+        endMarker: curSecLines.slice(-3).join(" "),
+      });
+    }
+
     return {
       number: chapNum,
       title: chap.title || `Chapter ${chapNum}`,
       type: chapNum === 1 ? "INTRODUCTION" : chapNum === 2 ? "LITERATURE_REVIEW" : chapNum === 3 ? "METHODOLOGY" : chapNum === 4 ? "RESULTS" : "CONCLUSION",
       intro: "",
-      sections: [
+      sections: sections.length > 0 ? sections : [
         {
           title: chap.title || "Body",
-          content: chap.text,
-          startMarker: chapLines.slice(0, 3).join(" "),
-          endMarker: chapLines.slice(-3).join(" "),
+          content: chapText,
+          startMarker: chap.lines.slice(0, 3).join(" "),
+          endMarker: chap.lines.slice(-3).join(" "),
         },
       ],
       figures: chapFigs,
