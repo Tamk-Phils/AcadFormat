@@ -780,7 +780,8 @@ export function buildFinalDocument(input: any): FinalDocument {
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
     chapter.sections.forEach((section, sectionIndex) => {
       const number = `${chapterNumber}.${sectionIndex + 1}`;
-      const sectionTitle = cleanTitle(section.title);
+      let sectionTitle = cleanTitle(section.title).replace(/^(?:\d+\.)+\d*\s*/, "").trim();
+      if (!sectionTitle) sectionTitle = `Section ${sectionIndex + 1}`;
       sectionPageMarks.push({ title: `${number} ${sectionTitle}`, blockIndex: rawBlocks.length });
       rawBlocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
 
