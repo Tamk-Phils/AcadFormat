@@ -531,9 +531,18 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         blocks.push({ type: "heading2", text: line });
       } else {
         const isListItem = LIST_ITEM_REGEX.test(line);
+        const isReferenceLine = /^[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\./.test(line);
         if (isListItem) {
           flushPara();
           blocks.push({ type: "bullet", text: line });
+          hasEmptyLine = false;
+        } else if (isReferenceLine) {
+          flushPara();
+          // Split inline merged references running together on a single line
+          const splitRefs = line.split(/(?<=\b(?:19|20)\d{2}[a-z]?\b[).;]*)\s+(?=[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\.)/);
+          splitRefs.forEach((ref) => {
+            if (ref.trim()) blocks.push({ type: "reference", text: ref.trim() });
+          });
           hasEmptyLine = false;
         } else {
           if (pendingPara.length > 0) {
@@ -612,12 +621,14 @@ function chunkBlocks(blocks: Block[]): Block[][] {
   }
   if (current.length > 0) pages.push(current);
 
-  // Never leave a heading orphaned as the last line of a page.
+  // Never leave a heading or table caption orphaned as the last line of a page.
   for (let i = 0; i < pages.length - 1; i += 1) {
     const page = pages[i]!;
     while (
       page.length > 1 &&
-      (page[page.length - 1]!.type === "heading1" || page[page.length - 1]!.type === "heading2")
+      (page[page.length - 1]!.type === "heading1" ||
+        page[page.length - 1]!.type === "heading2" ||
+        page[page.length - 1]!.type === "caption")
     ) {
       pages[i + 1]!.unshift(page.pop()!);
     }

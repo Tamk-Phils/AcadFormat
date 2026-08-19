@@ -354,6 +354,7 @@ function renderPage(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             pageBreakBefore: elements.length > 0,
+            keepWithNext: true,
             spacing: { before: 240, after: 80, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true, size: size + 4 })],
           }),
@@ -362,6 +363,7 @@ function renderPage(
       case "heading2":
         elements.push(
           new Paragraph({
+            keepWithNext: true,
             spacing: { before: 180, after: 60, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true })],
           }),
@@ -371,7 +373,8 @@ function renderPage(
         elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            spacing,
+            keepWithNext: true,
+            spacing: { before: 120, after: 60, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, italics: true, size: size - 2 })],
           }),
         );
@@ -405,6 +408,8 @@ function renderPage(
 
         const rows = rawRows.map((row, rIdx) => {
           return new TableRow({
+            cantSplit: true,
+            tableHeader: rIdx === 0,
             children: row.map((cell) => {
               return new TableCell({
                 width: { size: 100 / row.length, type: WidthType.PERCENTAGE },
@@ -473,8 +478,20 @@ function renderPage(
         );
         break;
       }
+      case "reference": {
+        elements.push(
+          new Paragraph({
+            alignment: AlignmentType.LEFT,
+            indent: { left: 720, hanging: 720 },
+            spacing: { before: 60, after: 120, line: Math.round(config.lineSpacing * 240) },
+            children: [new TextRun({ ...common, text: block.text })],
+          })
+        );
+        break;
+      }
       default: {
         const isBulletLine = /^\s*[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s+/.test(block.text || "");
+        const isRefLine = /^[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\./.test(block.text || "");
         if (isBulletLine) {
           const cleanText = (block.text || "").replace(/^\s*[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*/, "").trim();
           elements.push(
@@ -483,6 +500,15 @@ function renderPage(
               indent: { left: 480 },
               spacing: { before: 40, after: 40, line: Math.round(config.lineSpacing * 240) },
               children: [new TextRun({ ...common, text: cleanText })],
+            })
+          );
+        } else if (isRefLine) {
+          elements.push(
+            new Paragraph({
+              alignment: AlignmentType.LEFT,
+              indent: { left: 720, hanging: 720 },
+              spacing: { before: 60, after: 120, line: Math.round(config.lineSpacing * 240) },
+              children: [new TextRun({ ...common, text: block.text })],
             })
           );
         } else {
