@@ -410,6 +410,23 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     }
 
     if (rawRows.length > 0) {
+      const fullText = rawRows.flatMap((r) => r).join(" ");
+      const sectionMatches = fullText.match(/\b\d+\.\d+\s+[A-Za-z]/g) || [];
+
+      // If this table is actually a list of sub-chapter section headings (e.g. 1.1 Background, 1.2 Description...),
+      // DO NOT turn it into a table! Unpack rows as normal paragraphs.
+      if (sectionMatches.length >= 2) {
+        rawRows.forEach((row) => {
+          const lineText = row.filter(Boolean).join(" ").trim();
+          if (lineText) {
+            blocks.push({ type: "para", text: lineText });
+          }
+        });
+        tableLines = [];
+        inTable = false;
+        return;
+      }
+
       const maxCols = Math.max(...rawRows.map((r) => r.length));
       const paddedRows = rawRows.map((r) => {
         const copy = [...r];
@@ -859,56 +876,50 @@ export function buildFinalDocument(input: any): FinalDocument {
           blocks.push(block);
         }
       } else if (block.type === "table") {
-        let tabIdx = chapter.tables.findIndex((_, idx) => !consumedTables.has(idx));
-        const table = tabIdx >= 0 ? chapter.tables[tabIdx] : undefined;
-        if (table) {
-          consumedTables.add(tabIdx);
-          const label =
-            config.tableNumbering === "chapter"
-              ? `Table ${chapterNumber}.${tabIdx + 1}`
-              : `Table ${listOfTables.length + tabIdx + 1}`;
+        const fullText = (block.text || "") + " " + (block.tableRows || []).flatMap((r) => r).join(" ");
+        const sectionMatches = fullText.match(/\b\d+\.\d+\s+[A-Za-z]/g) || [];
 
-          // Deduplicate: if preceding block is a duplicate caption/text line, pop it
-          if (blocks.length > 0) {
-            const lastBlock = blocks[blocks.length - 1];
-            if (
-              lastBlock &&
-              (lastBlock.type === "caption" || lastBlock.type === "para" || lastBlock.type === "center") &&
-              (lastBlock.text.toLowerCase().includes(table.title.toLowerCase().slice(0, 15)) ||
-                /^table\s+\d+/i.test(lastBlock.text.trim()))
-            ) {
-              blocks.pop();
+        if (sectionMatches.length >= 2) {
+          // Unpack section list outline into normal paragraphs without table grid or caption
+          (block.tableRows || []).forEach((row) => {
+            const lineText = row.filter(Boolean).join(" ").trim();
+            if (lineText) {
+              blocks.push({ type: "para", text: lineText });
             }
-          }
-
-          tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
-          blocks.push({ type: "caption", text: `${label}: ${table.title}` });
-          blocks.push({
-            ...block,
-            text: table.title,
           });
         } else {
-          const autoTitle = block.text && !block.text.includes("|") ? block.text.trim() : "Summary Table";
-          const label =
-            config.tableNumbering === "chapter"
-              ? `Table ${chapterNumber}.${tableMarks.length + 1}`
-              : `Table ${listOfTables.length + tableMarks.length + 1}`;
+          let tabIdx = chapter.tables.findIndex((_, idx) => !consumedTables.has(idx));
+          const table = tabIdx >= 0 ? chapter.tables[tabIdx] : undefined;
+          if (table) {
+            consumedTables.add(tabIdx);
+            const label =
+              config.tableNumbering === "chapter"
+                ? `Table ${chapterNumber}.${tabIdx + 1}`
+                : `Table ${listOfTables.length + tabIdx + 1}`;
 
-          // Deduplicate if preceding block is a duplicate caption
-          if (blocks.length > 0) {
-            const lastBlock = blocks[blocks.length - 1];
-            if (
-              lastBlock &&
-              (lastBlock.type === "caption" || lastBlock.type === "para" || lastBlock.type === "center") &&
-              /^table\s+\d+/i.test(lastBlock.text.trim())
-            ) {
-              blocks.pop();
+            // Deduplicate: if preceding block is a duplicate caption/text line, pop it
+            if (blocks.length > 0) {
+              const lastBlock = blocks[blocks.length - 1];
+              if (
+                lastBlock &&
+                (lastBlock.type === "caption" || lastBlock.type === "para" || lastBlock.type === "center") &&
+                (lastBlock.text.toLowerCase().includes(table.title.toLowerCase().slice(0, 15)) ||
+                  /^table\s+\d+/i.test(lastBlock.text.trim()))
+              ) {
+                blocks.pop();
+              }
             }
-          }
 
-          tableMarks.push({ label, title: autoTitle, blockIndex: blocks.length });
-          blocks.push({ type: "caption", text: `${label}: ${autoTitle}` });
-          blocks.push(block);
+            tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
+            blocks.push({ type: "caption", text: `${label}: ${table.title}` });
+            blocks.push({
+              ...block,
+              text: table.title,
+            });
+          } else {
+            // Render genuine data table without adding synthetic Table X.Y auto-captions
+            blocks.push(block);
+          }
         }
       } else {
         blocks.push(block);
