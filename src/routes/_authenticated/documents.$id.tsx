@@ -152,8 +152,9 @@ function Workspace() {
     if (!doc.data?.model) return null;
     try {
       const config = resolveConfig(selection);
+      const { model: alignedModel } = verifyAndAlignDocumentModel(doc.data.model as any);
       return buildFinalDocument({
-        model: doc.data.model as any,
+        model: alignedModel,
         config,
         selection,
       });

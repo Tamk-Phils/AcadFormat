@@ -3,7 +3,7 @@ import { isPreambleNoiseLine } from "./utils";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
-const MAX_CHARS = 16_000;
+const MAX_CHARS = 200_000;
 
 const SYSTEM_PROMPT = `You are the academic document understanding and validation engine behind AcadFormat.
 You analyse a COMPLETE academic work as one document, never page by page.
@@ -246,8 +246,8 @@ function fallbackRuleBasedAnalysis(input: {
     abstractContent = absLines.join("\n\n").trim();
   }
 
-  // Chapter Header Matching
-  const chapterHeaderRegex = /^(?:CHAPTER\s+(?:[IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b[:.\-–—]?\s*(.*))/i;
+  // Chapter Header Matching (matches "CHAPTER 1", "CHAPTER TWO", "1.0 INTRODUCTION", "2. LITERATURE REVIEW", etc.)
+  const chapterHeaderRegex = /^(?:CHAPTER\s+(?:[IVXLCDM]+|\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)\b[:.\-–—]?\s*(.*)|(?:[1-5]\.0?\s+(?:INTRODUCTION|LITERATURE|METHODOLOGY|RESULTS|CONCLUSION|DISCUSSION)[^\n]*))/i;
 
   let currentChapterTitle = "";
   let currentChapterLines: string[] = [];

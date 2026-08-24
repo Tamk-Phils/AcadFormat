@@ -127,5 +127,45 @@ export function restoreVerbatimContent(model: DocumentModel, sourceText: string)
     if (slice.length > (section.content || "").length) section.content = slice;
   });
 
+  // Helper for word representation of numbers 1..5
+  function numToWord(num: number): string {
+    const words = ["ONE", "TWO", "THREE", "FOUR", "FIVE"];
+    return words[num - 1] || String(num);
+  }
+
+  // Safety Net: Guarantee EVERY chapter (1..5) has complete verbatim content from sourceText
+  next.chapters.forEach((ch, idx) => {
+    const chapNum = idx + 1;
+    const currentLen = ch.sections.reduce((sum, s) => sum + (s.content?.length || 0), 0);
+
+    if (currentLen < 50) {
+      const chapRegex = new RegExp(`(?:CHAPTER\\s+(?:${chapNum}|${numToWord(chapNum)})|${chapNum}\\.0?\\s+(?:INTRODUCTION|LITERATURE|METHODOLOGY|RESULTS|CONCLUSION|DISCUSSION))`, "i");
+      const m = sourceText.match(chapRegex);
+
+      if (m && m.index !== undefined) {
+        const chapStart = m.index;
+        const nextChapNum = chapNum + 1;
+        const nextRegex = new RegExp(`(?:CHAPTER\\s+(?:${nextChapNum}|${numToWord(nextChapNum)})|${nextChapNum}\\.0?\\s+(?:LITERATURE|METHODOLOGY|RESULTS|CONCLUSION|REFERENCES|BIBLIOGRAPHY))`, "i");
+        const nextMatch = sourceText.slice(chapStart + 20).match(nextRegex);
+
+        const chapEnd = nextMatch && nextMatch.index !== undefined
+          ? chapStart + 20 + nextMatch.index
+          : sourceText.length;
+
+        const chapText = sourceText.slice(chapStart, chapEnd).trim();
+        if (chapText.length > 50) {
+          ch.sections = [
+            {
+              title: ch.title || `Chapter ${chapNum}`,
+              content: chapText,
+              startMarker: chapText.slice(0, 50),
+              endMarker: chapText.slice(-50),
+            }
+          ];
+        }
+      }
+    }
+  });
+
   return next;
 }
