@@ -485,28 +485,22 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     }
 
     const isCaptionLine = /^(table|tab\.)\s*\d+/i.test(line);
-    const hasPipes = (line.match(/\|/g) || []).length >= 1;
-    const hasTabs = line.includes("\t");
-    const isDivider = /^[:\|\-\s]{3,}$/.test(line) && line.includes("-");
-    const hasMultiSpace = /\S\s{2,}\S/.test(line);
+    const pipeCount = (line.match(/\|/g) || []).length;
+    const hasPipes = pipeCount >= 2;
+    const isExplicitPipeTable = line.includes("  |  ") || (line.startsWith("|") && line.endsWith("|"));
+    const isDivider = /^[:\|\-\s]{3,}$/.test(line) && line.includes("-") && line.includes("|");
 
     const checkNextIsTable = () => {
       if (i + 1 >= lines.length) return false;
       const next = lines[i + 1]!.trim();
-      return (next.match(/\|/g) || []).length >= 1 || next.includes("\t") || /\S\s{2,}\S/.test(next) || (/^[:\|\-\s]{3,}$/.test(next) && next.includes("-"));
+      return (next.match(/\|/g) || []).length >= 2 || next.includes("  |  ");
     };
-
-    const isPdfTableLine = Boolean(parsePdfTableLine(line));
 
     const isTableRow =
       !isCodeLine(line) &&
-      (isPdfTableLine ||
-        hasPipes ||
-        line.includes("  |  ") ||
-        (line.startsWith("|") && line.endsWith("|")) ||
-        hasTabs ||
+      (hasPipes ||
+        isExplicitPipeTable ||
         isDivider ||
-        (hasMultiSpace && (checkNextIsTable() || line.split(/\s{2,}/).length >= 3)) ||
         (isCaptionLine && checkNextIsTable()));
 
     if (isTableRow) {

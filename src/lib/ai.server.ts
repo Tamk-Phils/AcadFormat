@@ -2,7 +2,7 @@ import type { AnalysisResult, DocumentModel } from "./document-model";
 import { isPreambleNoiseLine } from "./utils";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const MODEL = "google/gemini-2.5-flash";
+const MODEL = "google/gemini-2.5-pro";
 const MAX_CHARS = 200_000;
 
 const SYSTEM_PROMPT = `You are the academic document understanding and validation engine behind AcadFormat.
