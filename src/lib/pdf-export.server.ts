@@ -12,8 +12,48 @@ const PT_PER_INCH = 72;
 const PAGE_WIDTH = 8.5 * PT_PER_INCH;
 const PAGE_HEIGHT = 11 * PT_PER_INCH;
 
+/** Thoroughly sanitize glyphs to prevent pdf-lib WinAnsi encoding exceptions. */
+export function sanitizeWinAnsi(text: string, font?: PDFFont): string {
+  if (!text) return "";
+  
+  let clean = text
+    // Replace bullet points & MS Word symbols with standard WinAnsi bullet
+    .replace(/[\uF0B7\uF0D8\uF0A7\u25AA\u25B6\u25BA\u25CF\u25CB\u25A0\u25A1\u25C6\u25C7]/g, "•")
+    // Smart quotes & hyphens
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...")
+    // Common math & arrow symbols
+    .replace(/\u2264/g, "<=")
+    .replace(/\u2265/g, ">=")
+    .replace(/\u2260/g, "!=")
+    .replace(/\u2248/g, "~=")
+    .replace(/\u2192/g, "->")
+    .replace(/\u2190/g, "<-")
+    .replace(/\u21D2/g, "=>")
+    // Remove zero-width & non-printable control characters
+    .replace(/[\u200B-\u200F\u2060\uFEFF]/g, "");
+
+  if (font && typeof (font as any).encodeText === "function") {
+    let safe = "";
+    for (const char of clean) {
+      try {
+        (font as any).encodeText(char);
+        safe += char;
+      } catch {
+        safe += " ";
+      }
+    }
+    return safe;
+  }
+
+  return clean.replace(/[^\x09\x0A\x20-\x7E\u00A0-\u00FF]/g, " ");
+}
+
 function wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
+  const cleanText = sanitizeWinAnsi(text, font);
+  const words = cleanText.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = "";
   for (const word of words) {
@@ -27,16 +67,6 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
   }
   if (line) lines.push(line);
   return lines.length > 0 ? lines : [""];
-}
-
-/** Strip glyphs the PDF standard fonts (WinAnsi) cannot encode. */
-function sanitize(text: string) {
-  return text
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/[\u201C\u201D]/g, '"')
-    .replace(/[\u2013\u2014]/g, "-")
-    .replace(/\u2026/g, "...")
-    .replace(/[^\x09\x0A\x20-\x7E\u00A0-\u00FF]/g, "");
 }
 
 export async function buildPdf(
@@ -80,8 +110,9 @@ export async function buildPdf(
 
   const stamp = (target: typeof sheet, label: string) => {
     if (!label) return;
-    const width = regular.widthOfTextAtSize(label, baseSize);
-    target.drawText(label, {
+    const cleanLabel = sanitizeWinAnsi(label, regular);
+    const width = regular.widthOfTextAtSize(cleanLabel, baseSize);
+    target.drawText(cleanLabel, {
       x: (PAGE_WIDTH - width) / 2,
       y: margin.bottom / 2,
       size: baseSize,
@@ -124,21 +155,22 @@ export async function buildPdf(
       options: { font: PDFFont; size: number; align?: "left" | "center" | "justify" },
     ) => {
       if (!text || !text.trim()) return;
-      const lines = wrap(sanitize(text), options.font, options.size, contentWidth);
+      const lines = wrap(text, options.font, options.size, contentWidth);
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i] || "";
+        const line = sanitizeWinAnsi(lines[i] || "", options.font);
         ensure(leading);
         
         if (options.align === "justify" && i < lines.length - 1 && line.includes(" ")) {
           const words = line.split(" ");
-          const textWidthWithoutSpaces = words.reduce((sum, word) => sum + options.font.widthOfTextAtSize(word, options.size), 0);
+          const textWidthWithoutSpaces = words.reduce((sum, word) => sum + options.font.widthOfTextAtSize(sanitizeWinAnsi(word, options.font), options.size), 0);
           const spaceToDistribute = contentWidth - textWidthWithoutSpaces;
           const spaceWidth = spaceToDistribute / (words.length - 1);
           
           let currentX = margin.left;
           for (const word of words) {
-            sheet.drawText(word, { x: currentX, y: y - options.size, size: options.size, font: options.font });
-            currentX += options.font.widthOfTextAtSize(word, options.size) + spaceWidth;
+            const cleanWord = sanitizeWinAnsi(word, options.font);
+            sheet.drawText(cleanWord, { x: currentX, y: y - options.size, size: options.size, font: options.font });
+            currentX += options.font.widthOfTextAtSize(cleanWord, options.size) + spaceWidth;
           }
         } else {
           const width = options.font.widthOfTextAtSize(line, options.size);
@@ -178,13 +210,15 @@ export async function buildPdf(
         ensure(totalHeight + 12);
 
         let tempY = y;
-        for (const line of leftLines) {
+        for (const rawLine of leftLines) {
+          const line = sanitizeWinAnsi(rawLine, bold);
           sheet.drawText(line, { x: margin.left, y: tempY - 10, font: bold, size: baseSize - 2 });
           tempY -= leading;
         }
 
         tempY = y;
-        for (const line of rightLines) {
+        for (const rawLine of rightLines) {
+          const line = sanitizeWinAnsi(rawLine, bold);
           const textWidth = bold.widthOfTextAtSize(line, baseSize - 2);
           sheet.drawText(line, { x: margin.left + contentWidth - textWidth, y: tempY - 10, font: bold, size: baseSize - 2 });
           tempY -= leading;
@@ -235,8 +269,9 @@ export async function buildPdf(
         let textY = y - 10;
         const drawCenterLine = (txt: string, isBold = false, sz = baseSize - 3) => {
           const fn = isBold ? bold : regular;
-          const textW = fn.widthOfTextAtSize(txt, sz);
-          sheet.drawText(txt, {
+          const cleanTxt = sanitizeWinAnsi(txt, fn);
+          const textW = fn.widthOfTextAtSize(cleanTxt, sz);
+          sheet.drawText(cleanTxt, {
             x: margin.left + (contentWidth - textW) / 2,
             y: textY,
             font: fn,
@@ -271,7 +306,7 @@ export async function buildPdf(
         const assets = ids.map((id) => embedded.get(id)).filter((a): a is PDFImage => Boolean(a));
         if (assets.length === 0) {
           if (block.type === "image") {
-            const figText = block.text || "Figure Illustration";
+            const figText = sanitizeWinAnsi(block.text || "Figure Illustration", italic);
             ensure(35);
             sheet.drawRectangle({
               x: margin.left + 40,
@@ -314,7 +349,8 @@ export async function buildPdf(
       }
       if (block.type === "title") {
         if (block.borderBox) {
-          const titleLines = wrap(sanitize(block.text), bold, 16, contentWidth - 40);
+          const cleanBoxText = sanitizeWinAnsi(block.text, bold);
+          const titleLines = wrap(cleanBoxText, bold, 16, contentWidth - 40);
           const boxHeight = titleLines.length * (16 * config.lineSpacing) + 30;
           ensure(boxHeight);
           sheet.drawRectangle({
@@ -327,8 +363,9 @@ export async function buildPdf(
           });
           let textY = y - 15;
           for (const line of titleLines) {
-            const width = bold.widthOfTextAtSize(line, 16);
-            sheet.drawText(line, {
+            const cleanLine = sanitizeWinAnsi(line, bold);
+            const width = bold.widthOfTextAtSize(cleanLine, 16);
+            sheet.drawText(cleanLine, {
               x: margin.left + (contentWidth - width) / 2,
               y: textY - 16,
               size: 16,
@@ -361,24 +398,27 @@ export async function buildPdf(
         const indentWidth = Math.max(0, (block.level ?? 1) - 1) * 20;
 
         if (!right) {
-          const lines = wrap(sanitize(left || ""), font, baseSize, contentWidth - indentWidth);
-          for (const line of lines) {
+          const lines = wrap(left || "", font, baseSize, contentWidth - indentWidth);
+          for (const rawLine of lines) {
+            const line = sanitizeWinAnsi(rawLine, font);
             ensure(leading);
             sheet!.drawText(line, { x: margin.left + indentWidth, y: y - baseSize, size: baseSize, font });
             y -= leading;
           }
         } else {
-          const rightWidth = font.widthOfTextAtSize(right, baseSize);
-          const lines = wrap(sanitize(left || ""), font, baseSize, contentWidth - indentWidth - rightWidth - 20);
+          const cleanRight = sanitizeWinAnsi(right, font);
+          const rightWidth = font.widthOfTextAtSize(cleanRight, baseSize);
+          const lines = wrap(left || "", font, baseSize, contentWidth - indentWidth - rightWidth - 20);
 
           for (let i = 0; i < lines.length; i++) {
+            const line = sanitizeWinAnsi(lines[i] || "", font);
             ensure(leading);
-            sheet!.drawText(lines[i] || "", { x: margin.left + indentWidth, y: y - baseSize, size: baseSize, font });
+            sheet!.drawText(line, { x: margin.left + indentWidth, y: y - baseSize, size: baseSize, font });
 
             if (i === lines.length - 1) {
-              sheet!.drawText(right, { x: margin.left + contentWidth - rightWidth, y: y - baseSize, size: baseSize, font });
+              sheet!.drawText(cleanRight, { x: margin.left + contentWidth - rightWidth, y: y - baseSize, size: baseSize, font });
 
-              const lastLineWidth = font.widthOfTextAtSize(lines[i] || "", baseSize);
+              const lastLineWidth = font.widthOfTextAtSize(line, baseSize);
               const dotStartX = margin.left + indentWidth + lastLineWidth + 5;
               const dotEndX = margin.left + contentWidth - rightWidth - 5;
               let currentX = dotStartX;
@@ -405,7 +445,7 @@ export async function buildPdf(
             const rowFont = rIdx === 0 ? bold : regular;
 
             const wrappedCells = row.map((cell) =>
-              wrap(sanitize(cell), rowFont, cellFontSize, colWidth - 8),
+              wrap(cell, rowFont, cellFontSize, colWidth - 8),
             );
             const maxLines = Math.max(1, ...wrappedCells.map((lines) => lines.length));
             const rowHeight = maxLines * cellLeading + 8;
@@ -434,7 +474,8 @@ export async function buildPdf(
             for (let cIdx = 0; cIdx < row.length; cIdx += 1) {
               const cellLines = wrappedCells[cIdx]!;
               let cellY = rowTopY - 4;
-              for (const line of cellLines) {
+              for (const rawLine of cellLines) {
+                const line = sanitizeWinAnsi(rawLine, rowFont);
                 sheet.drawText(line, {
                   x: margin.left + cIdx * colWidth + 4,
                   y: cellY - cellFontSize,
@@ -468,7 +509,7 @@ export async function buildPdf(
         }
         y -= 12;
       } else if (block.type === "code") {
-        const codeLines = sanitize(block.text || "").split("\n");
+        const codeLines = sanitizeWinAnsi(block.text || "", mono).split("\n");
         const fontSize = Math.max(8, baseSize - 2);
         const codeLeading = fontSize * 1.3;
         const blockHeight = codeLines.length * codeLeading + 10;
@@ -485,7 +526,8 @@ export async function buildPdf(
         });
 
         let codeY = y - 6;
-        for (const line of codeLines) {
+        for (const rawLine of codeLines) {
+          const line = sanitizeWinAnsi(rawLine, mono);
           sheet.drawText(line, {
             x: margin.left + 8,
             y: codeY - fontSize,
