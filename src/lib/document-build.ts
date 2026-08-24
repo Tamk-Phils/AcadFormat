@@ -948,23 +948,6 @@ export function buildFinalDocument(input: any): FinalDocument {
       blocks.push({ type: "caption", text: `${label}: ${figure.caption}` });
     }
 
-    for (let t = 0; t < chapter.tables.length; t += 1) {
-      if (consumedTables.has(t)) continue;
-      const table = chapter.tables[t]!;
-      const label =
-        config.tableNumbering === "chapter"
-          ? `Table ${chapterNumber}.${t + 1}`
-          : `Table ${listOfTables.length + t + 1}`;
-
-      const origLabelStr = typeof table.originalLabel === "string" ? table.originalLabel : "";
-      const parsedRows = parseTableRows({ text: origLabelStr || table.title });
-      if (parsedRows.length > 0) {
-        tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
-        blocks.push({ type: "caption", text: `${label}: ${table.title}` });
-        blocks.push({ type: "table", text: origLabelStr || table.title, tableRows: parsedRows });
-      }
-    }
-
     const startPage = pushBody(`Chapter ${chapterNumber}`, blocks, "body");
     const pageOfBlock = (blockIndex: number) => {
       const chunks = chunkBlocks(blocks);

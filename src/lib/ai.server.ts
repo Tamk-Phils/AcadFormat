@@ -45,18 +45,19 @@ Return STRICT JSON only, matching this shape:
    "meta": {"title":"","author":"","registrationNumber":"","department":"","supervisors":[],"monthYear":"","keywords":[],"headOfDepartment":"","director":"","degreeOfAuthor":""},
    "preliminary": [{"type":"ABSTRACT","title":"Abstract","content":"","present":true}],
    "chapters": [{"number":1,"title":"","type":"INTRODUCTION","intro":"","sections":[{"title":"","content":"","startMarker":"","endMarker":""}],
-                 "figures":[{"id":"f1","chapter":1,"caption":"","originalLabel":"","kind":"","requiresUserReview":false,"confidence":90}],
-                 "tables":[{"id":"t1","chapter":1,"title":"","originalLabel":"","requiresUserReview":false,"confidence":90}]}],
+                 "figures":[],
+                 "tables":[]}],
    "references": [],
-   "appendices": [{"label":"Appendix A","title":"","content":""}],
-   "abbreviations": [{"abbreviation":"","meaning":"","firstOccurrence":"","definedInText":true,"requiresUserReview":false,"confidence":90}]
+   "appendices": [],
+   "abbreviations": []
  },
  "health": {"structure":0,"formatting":0,"figures":0,"tables":0,"abbreviations":0,"references":0,"crossReferences":0,"summary":""},
  "issues": [{"category":"STRUCTURE|FIGURE|TABLE|ABBREVIATION|CROSS_REFERENCE|REFERENCE|NUMBERING|PRELIMINARY",
              "location":"","problem":"","explanation":"","suggestion":"","confidence":0,"severity":"low|medium|high"}]
 }
 health.figures/tables/abbreviations/references/crossReferences are COUNTS of issues (abbreviations = count detected).
-structure and formatting are percentage scores 0-100. Section content must remain complete and verbatim.`;
+structure and formatting are percentage scores 0-100. Section content must remain complete and verbatim.
+CRITICAL: NEVER invent or create tables that are not explicitly present in the source text. If no tables exist, tables must be an empty array [].`;
 
 export type AIProvider = "gemini" | "groq" | "openrouter" | "lovable" | "deepseek" | "custom";
 
