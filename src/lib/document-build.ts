@@ -1572,16 +1572,8 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
   nextModel.chapters.forEach((ch) => {
     ch.sections.forEach((sec) => {
       if (!sec.content || sec.content.trim().length < 30) {
-        if (sec.title.includes("Model Development")) {
-          sec.content = "Supervised machine learning algorithms (XGBoost, Random Forest) and deep neural architectures (BERT, LSTM) are developed and trained on normalized feature vectors extracted during the pre-processing phase to perform real-time phishing classification.";
-          fixesApplied.push(`Synthesized missing academic content for empty sub-chapter "${sec.title}" in Chapter ${ch.number}.`);
-        } else if (sec.title.includes("Rationale") || sec.title.includes("Justification")) {
-          sec.content = "This study provides a technical and structural rationale for introducing AI-driven detection mechanisms into existing cybersecurity frameworks, benefiting practitioners and academic researchers.";
-          fixesApplied.push(`Synthesized missing academic content for empty sub-chapter "${sec.title}" in Chapter ${ch.number}.`);
-        } else {
-          sec.content = `This section details the ${sec.title.toLowerCase()} as part of the structural framework of Chapter ${ch.number}.`;
-          fixesApplied.push(`Populated body text for sub-chapter "${sec.title}".`);
-        }
+        sec.content = `This section details the ${sec.title.toLowerCase()} as part of the conceptual and methodological framework of Chapter ${ch.number}. Further detailed investigation and empirical analysis are presented in subsequent sections.`;
+        fixesApplied.push(`Populated structured body text for sub-chapter "${sec.title}".`);
       }
     });
   });
@@ -1634,6 +1626,54 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
   // Renumber remaining chapters sequentially 1..N
   nextModel.chapters.forEach((ch, idx) => {
     ch.number = idx + 1;
+  });
+
+  // 5. Dynamic Abbreviation Auto-Extraction from Document Content
+  const knownAcronyms: Record<string, string> = {
+    FIM: "File Integrity Monitoring",
+    SHA: "Secure Hash Algorithm",
+    AES: "Advanced Encryption Standard",
+    API: "Application Programming Interface",
+    UI: "User Interface",
+    CPU: "Central Processing Unit",
+    RAM: "Random Access Memory",
+    OS: "Operating System",
+    DB: "Database",
+    HTTP: "Hypertext Transfer Protocol",
+    HTTPS: "Hypertext Transfer Protocol Secure",
+    JSON: "JavaScript Object Notation",
+    REST: "Representational State Transfer",
+    CLI: "Command Line Interface",
+    IDS: "Intrusion Detection System",
+    IPS: "Intrusion Prevention System",
+    SIEM: "Security Information and Event Management",
+    ML: "Machine Learning",
+    AI: "Artificial Intelligence",
+    SOC: "Security Operations Center",
+    DSR: "Design Science Research",
+    TOC: "Table of Contents",
+    URL: "Uniform Resource Locator",
+  };
+
+  const fullDocText = nextModel.chapters
+    .flatMap((c) => c.sections.map((s) => s.content))
+    .join(" ");
+
+  Object.entries(knownAcronyms).forEach(([abbr, meaning]) => {
+    const regex = new RegExp(`\\b${abbr}\\b`);
+    if (regex.test(fullDocText)) {
+      if (!nextModel.abbreviations.some((a) => a.abbreviation.toUpperCase() === abbr)) {
+        nextModel.abbreviations.push({
+          abbreviation: abbr,
+          meaning,
+          firstOccurrence: "",
+          definedInText: true,
+          requiresUserReview: false,
+          confidence: 95,
+        });
+        fixesApplied.push(`Auto-extracted and added abbreviation "${abbr}" (${meaning}) to List of Abbreviations.`);
+      }
+    }
   });
 
   return {
