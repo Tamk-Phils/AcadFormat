@@ -1597,6 +1597,45 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
     });
   });
 
+  // 4. Enforce Max 5 Body Chapters & Reclassify Extra Chapters (e.g. Chapter 6)
+  if (nextModel.chapters.length > 5) {
+    const extraChaps = nextModel.chapters.slice(5);
+    nextModel.chapters = nextModel.chapters.slice(0, 5);
+
+    extraChaps.forEach((extra) => {
+      const titleLower = extra.title.toLowerCase();
+      if (titleLower.includes("reference") || titleLower.includes("bibliography")) {
+        extra.sections.forEach((sec) => {
+          if (sec.content) {
+            const lines = sec.content.split("\n").filter((l) => l.trim().length > 15);
+            nextModel.references.push(...lines);
+          }
+        });
+        fixesApplied.push(`Reclassified Chapter ${extra.number} ("${extra.title}") as Document References.`);
+      } else if (titleLower.includes("appendix") || titleLower.includes("appendices")) {
+        extra.sections.forEach((sec) => {
+          nextModel.appendices.push({
+            label: `Appendix ${nextModel.appendices.length + 1}`,
+            title: sec.title,
+            content: sec.content,
+          });
+        });
+        fixesApplied.push(`Reclassified Chapter ${extra.number} ("${extra.title}") as Document Appendices.`);
+      } else {
+        const ch5 = nextModel.chapters[4];
+        if (ch5) {
+          ch5.sections.push(...extra.sections);
+          fixesApplied.push(`Merged Chapter ${extra.number} ("${extra.title}") sections into Chapter 5 ("${ch5.title}").`);
+        }
+      }
+    });
+  }
+
+  // Renumber remaining chapters sequentially 1..N
+  nextModel.chapters.forEach((ch, idx) => {
+    ch.number = idx + 1;
+  });
+
   return {
     model: nextModel,
     verification: {
