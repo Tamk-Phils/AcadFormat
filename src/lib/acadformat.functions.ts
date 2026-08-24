@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { auditFinalDocument, buildFinalDocument } from "./document-build";
+import { auditFinalDocument, buildFinalDocument, verifyAndAlignDocumentModel } from "./document-build";
 import type { DocumentImage, DocumentModel, IssueDraft } from "./document-model";
 import { resolveConfig, type InstitutionSelection } from "./institutions";
 import { buildDocx, type ImageAsset } from "./docx-export.server";
@@ -107,11 +107,11 @@ export const analyzeDocument = createServerFn({ method: "POST" })
       }
 
       const restored = restoreVerbatimContent(analysis.model, extracted.text);
-      const analysedModel: DocumentModel = {
+      const { model: alignedModel, verification } = verifyAndAlignDocumentModel({
         ...restored,
         images: uploadedImages,
         original: extracted.original,
-      };
+      });
 
       await supabase
         .from("documents")
@@ -119,12 +119,12 @@ export const analyzeDocument = createServerFn({ method: "POST" })
           status: "analyzed",
           raw_text: extracted.text.slice(0, 200_000),
           understanding: toJson(analysis.understanding),
-          model: toJson(analysedModel),
+          model: toJson(alignedModel),
           health: toJson(analysis.health),
         })
         .eq("id", row.id);
 
-      return { ok: true as const };
+      return { ok: true as const, verification };
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Analysis failed.";
       await supabase.from("documents").update({ status: "failed", error_message: message }).eq("id", row.id);
@@ -150,16 +150,20 @@ export const formatDocument = createServerFn({ method: "POST" })
       .eq("document_id", row.id);
 
     const model = applyApprovedCorrections(row.model as unknown as DocumentModel, issues ?? []);
+    const { model: alignedModel, verification } = verifyAndAlignDocumentModel(model);
     const config = resolveConfig(data.selection);
-    const final = buildFinalDocument({ model, config, selection: data.selection });
-    const audit = auditFinalDocument(final, model);
+    const final = buildFinalDocument({ model: alignedModel, config, selection: data.selection });
+    const audit = {
+      ...auditFinalDocument(final, alignedModel),
+      verification,
+    };
 
     await supabase
       .from("documents")
       .update({
         status: "formatted",
         institution: toJson(data.selection),
-        model: toJson(model),
+        model: toJson(alignedModel),
         final_document: toJson(final),
         final_audit: toJson(audit),
       })

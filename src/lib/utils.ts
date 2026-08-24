@@ -59,3 +59,28 @@ export function parseTableRows(block: { tableRows?: string[][]; text?: string })
   });
 }
 
+export function isPreambleNoiseLine(line: string): boolean {
+  const norm = line.trim().toLowerCase();
+  if (!norm) return false;
+
+  if (
+    /^(?:building capacities|department of|a dissertation proposal|a thesis proposal|in partial fulfilment|in partial fulfillment|college of technology|university of bamenda|by:|supervisor:|degree of author|master of technology|m\.tech|b\.tech|ph\.d|august \d{4}|january|february|march|april|may|june|july|september|october|november|december)/i.test(norm)
+  ) {
+    return true;
+  }
+  if (
+    /^(?:certification|declaration|dedication|acknowledgement|acknowledgments|table of contents|list of figures|list of tables|list of abbreviations|abstract)\b/i.test(norm) &&
+    norm.length < 60
+  ) {
+    return true;
+  }
+  if (/^\[degree of author/i.test(norm) || /^\[title of proposal/i.test(norm) || /^\[author name/i.test(norm)) {
+    return true;
+  }
+  if (norm.includes("a dissertation proposal submitted to the department") || norm.includes("in partial fulfilment of the requirements")) {
+    return true;
+  }
+  return false;
+}
+
+

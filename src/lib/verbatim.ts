@@ -1,4 +1,5 @@
 import type { DocumentModel } from "./document-model";
+import { isPreambleNoiseLine } from "./utils";
 
 /**
  * The AI is asked never to shorten the work, but models still drift on very long
@@ -66,6 +67,13 @@ export function restoreVerbatimContent(model: DocumentModel, sourceText: string)
     const from = map[anchor.start] ?? 0;
     const to = map[Math.min(endNormalized, map.length - 1)] ?? sourceText.length;
     let slice = sourceText.slice(from, to).trim();
+
+    // Strip cover page / preamble noise lines from section content (especially for Chapter 1)
+    const rawLines = slice.split("\n");
+    const cleanLines = rawLines.filter((l) => !isPreambleNoiseLine(l));
+    if (cleanLines.length > 0) {
+      slice = cleanLines.join("\n").trim();
+    }
 
     // Trim trailing header lines belonging to the next section/chapter
     if (i + 1 < anchors.length) {

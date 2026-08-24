@@ -1,4 +1,5 @@
 import type { AnalysisResult, DocumentModel } from "./document-model";
+import { isPreambleNoiseLine } from "./utils";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-flash";
@@ -360,6 +361,7 @@ function fallbackRuleBasedAnalysis(input: {
           } else if (secName.includes("Scope")) {
             secContentLines = chap.lines.filter((l) => l.includes("study covers the design") || l.includes("prototype relies on publicly"));
           }
+          secContentLines = secContentLines.filter((l) => !isPreambleNoiseLine(l));
           if (secContentLines.length > 0) {
             secBlocks.push({
               title: secName,
