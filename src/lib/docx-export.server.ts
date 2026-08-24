@@ -560,16 +560,18 @@ export async function buildDocx(
     pages: RenderedPage[];
   }[] = [];
 
-  final.pages.forEach((p) => {
+  final.pages.forEach((p, pageIdx) => {
     const isNumbered = Boolean(p.numberLabel);
     const hasPageBorder = Boolean(p.hasPageBorder);
-    
+    const isNewSectionPage = p.startsSection && pageIdx > 0;
+
     const lastGroup = groups[groups.length - 1];
     if (
       lastGroup &&
       lastGroup.kind === p.kind &&
       lastGroup.isNumbered === isNumbered &&
-      lastGroup.hasPageBorder === hasPageBorder
+      lastGroup.hasPageBorder === hasPageBorder &&
+      !isNewSectionPage
     ) {
       lastGroup.pages.push(p);
     } else {

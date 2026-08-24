@@ -1548,112 +1548,30 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
     fixesApplied.push("Extracted Declaration text from body text into Preliminary Pages.");
   }
 
-  // 2. Canonical 5-Chapter Alignment & Section Re-sorting Pass
-  const canonicalTitles = [
-    "INTRODUCTION",
-    "LITERATURE REVIEW AND THEORETICAL FRAMEWORK",
-    "METHODOLOGY AND SYSTEM ARCHITECTURE",
-    "RESULTS AND DISCUSSION",
-    "CONCLUSION AND RECOMMENDATIONS",
-  ];
+  // 2. Preserve Original Chapter Structure & Clean Section Formatting (Faithful Editing Engine)
+  nextModel.chapters = nextModel.chapters.map((ch, idx) => {
+    const chapNum = ch.number || (idx + 1);
 
-  const rawSections: { origChap: number; sec: Section }[] = [];
-  nextModel.chapters.forEach((ch) => {
-    ch.sections.forEach((sec) => {
-      const cleanContent = sec.content?.trim() || "";
-      if (cleanContent.length > 15 || !/^\d+\.\d+[A-Z]?\b/i.test(sec.title)) {
-        rawSections.push({ origChap: ch.number, sec });
-      } else {
-        fixesApplied.push(`Pruned empty orphaned sub-chapter fragment "${sec.title}".`);
-      }
-    });
-  });
-
-  const binnedChapters: Section[][] = [[], [], [], [], []];
-
-  rawSections.forEach(({ origChap, sec }) => {
-    const titleLower = sec.title.toLowerCase();
-    const explicitMatch = sec.title.match(/^(\d+)\.\d+/);
-    let targetChap = origChap;
-
-    if (explicitMatch) {
-      const chapNum = parseInt(explicitMatch[1], 10);
-      if (chapNum >= 1 && chapNum <= 5) {
-        targetChap = chapNum;
-      }
-    } else {
-      if (
-        titleLower.includes("background") ||
-        titleLower.includes("introduction") ||
-        titleLower.includes("problem statement") ||
-        titleLower.includes("objective") ||
-        titleLower.includes("rationale") ||
-        titleLower.includes("justification") ||
-        titleLower.includes("significance") ||
-        titleLower.includes("scope") ||
-        titleLower.includes("delimitation")
-      ) {
-        targetChap = 1;
-      } else if (
-        titleLower.includes("literature") ||
-        titleLower.includes("theoretical framework") ||
-        titleLower.includes("related work") ||
-        titleLower.includes("conceptual review")
-      ) {
-        targetChap = 2;
-      } else if (
-        titleLower.includes("methodology") ||
-        titleLower.includes("research design") ||
-        titleLower.includes("system architecture") ||
-        titleLower.includes("system design") ||
-        titleLower.includes("work plan") ||
-        titleLower.includes("implementation plan")
-      ) {
-        targetChap = 3;
-      } else if (
-        titleLower.includes("results") ||
-        titleLower.includes("discussion") ||
-        titleLower.includes("evaluation") ||
-        titleLower.includes("findings")
-      ) {
-        targetChap = 4;
-      } else if (
-        titleLower.includes("conclusion") ||
-        titleLower.includes("recommendation") ||
-        titleLower.includes("future work")
-      ) {
-        targetChap = 5;
-      }
-    }
-
-    const binIdx = Math.max(0, Math.min(4, targetChap - 1));
-    sec.title = sec.title.replace(/^(?:\d+\.\d+(?:\.\d+)?[A-Z]?\s+)+/i, "").trim();
-    if (!sec.title) sec.title = `Section ${binIdx + 1}.${binnedChapters[binIdx].length + 1}`;
-    binnedChapters[binIdx].push(sec);
-  });
-
-  nextModel.chapters = binnedChapters.map((secs, idx) => {
-    const chapNum = idx + 1;
-    const existingChap = model.chapters[idx];
-    const title = existingChap?.title && !/^chapter\s+\d+/i.test(existingChap.title)
-      ? existingChap.title
-      : canonicalTitles[idx];
+    const cleanSections = ch.sections
+      .filter((sec) => {
+        const cleanContent = sec.content?.trim() || "";
+        // Only prune if section is completely empty
+        return cleanContent.length > 0;
+      })
+      .map((sec, secIdx) => {
+        let title = cleanTitle(sec.title).replace(/^(?:\d+\.)+\d*\s*/, "").trim();
+        if (!title) title = `Section ${chapNum}.${secIdx + 1}`;
+        return {
+          ...sec,
+          title,
+        };
+      });
 
     return {
+      ...ch,
       number: chapNum,
-      title,
-      type: chapNum === 1 ? "INTRODUCTION" : chapNum === 2 ? "LITERATURE_REVIEW" : chapNum === 3 ? "METHODOLOGY" : chapNum === 4 ? "RESULTS" : "CONCLUSION",
-      intro: existingChap?.intro || "",
-      sections: secs.length > 0 ? secs : [
-        {
-          title: `Overview of Chapter ${chapNum}`,
-          content: `This chapter presents the ${canonicalTitles[idx].toLowerCase()} for the study.`,
-          startMarker: "",
-          endMarker: "",
-        }
-      ],
-      figures: existingChap?.figures || [],
-      tables: existingChap?.tables || [],
+      title: ch.title || `CHAPTER ${chapNum}`,
+      sections: cleanSections.length > 0 ? cleanSections : ch.sections,
     };
   });
 
