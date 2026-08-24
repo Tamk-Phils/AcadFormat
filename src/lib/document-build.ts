@@ -962,21 +962,12 @@ export function buildFinalDocument(input: any): FinalDocument {
           ? `Table ${chapterNumber}.${t + 1}`
           : `Table ${listOfTables.length + t + 1}`;
 
-      tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
-      blocks.push({ type: "caption", text: `${label}: ${table.title}` });
       const origLabelStr = typeof table.originalLabel === "string" ? table.originalLabel : "";
       const parsedRows = parseTableRows({ text: origLabelStr || table.title });
       if (parsedRows.length > 0) {
+        tableMarks.push({ label, title: table.title, blockIndex: blocks.length });
+        blocks.push({ type: "caption", text: `${label}: ${table.title}` });
         blocks.push({ type: "table", text: origLabelStr || table.title, tableRows: parsedRows });
-      } else {
-        blocks.push({
-          type: "table",
-          text: table.title,
-          tableRows: [
-            ["Item / Parameter", "Description / Value"],
-            [table.title || `Table ${t + 1}`, "Preserved table data"],
-          ],
-        });
       }
     }
 
@@ -1321,7 +1312,7 @@ export function buildFinalDocument(input: any): FinalDocument {
           );
         }
 
-        addPrelim(type, titleText, blocks, "preliminary", true);
+        addPrelim(type, titleText, blocks, "preliminary", false);
         continue;
       }
 
@@ -1557,75 +1548,113 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
     fixesApplied.push("Extracted Declaration text from body text into Preliminary Pages.");
   }
 
-  if (certLines.length > 0) {
-    let certItem = nextModel.preliminary.find((p) => p.type === "CERTIFICATION");
-    if (!certItem) {
-      certItem = { type: "CERTIFICATION", title: "Certification", content: "", present: true };
-      nextModel.preliminary.push(certItem);
-    }
-    certItem.content = certLines.join("\n\n");
-    certItem.present = true;
-    fixesApplied.push("Extracted Certification text from body text into Preliminary Pages.");
-  }
+  // 2. Canonical 5-Chapter Alignment & Section Re-sorting Pass
+  const canonicalTitles = [
+    "INTRODUCTION",
+    "LITERATURE REVIEW AND THEORETICAL FRAMEWORK",
+    "METHODOLOGY AND SYSTEM ARCHITECTURE",
+    "RESULTS AND DISCUSSION",
+    "CONCLUSION AND RECOMMENDATIONS",
+  ];
 
-  // 2. Verify Sub-Chapter Completeness (No empty/orphaned sub-chapters)
+  const rawSections: { origChap: number; sec: Section }[] = [];
   nextModel.chapters.forEach((ch) => {
     ch.sections.forEach((sec) => {
-      if (!sec.content || sec.content.trim().length < 30) {
-        sec.content = `This section details the ${sec.title.toLowerCase()} as part of the conceptual and methodological framework of Chapter ${ch.number}. Further detailed investigation and empirical analysis are presented in subsequent sections.`;
-        fixesApplied.push(`Populated structured body text for sub-chapter "${sec.title}".`);
-      }
-    });
-  });
-
-  // 3. Clean Duplicate Section Heading Numbering
-  nextModel.chapters.forEach((ch) => {
-    ch.sections.forEach((sec) => {
-      const origTitle = sec.title;
-      sec.title = sec.title.replace(/^(?:\d+\.\d+(?:\.\d+)?\s+)+/i, "").trim();
-      if (sec.title !== origTitle) {
-        fixesApplied.push(`Normalized section title hierarchy from "${origTitle}" to "${sec.title}".`);
-      }
-    });
-  });
-
-  // 4. Enforce Max 5 Body Chapters & Reclassify Extra Chapters (e.g. Chapter 6)
-  if (nextModel.chapters.length > 5) {
-    const extraChaps = nextModel.chapters.slice(5);
-    nextModel.chapters = nextModel.chapters.slice(0, 5);
-
-    extraChaps.forEach((extra) => {
-      const titleLower = extra.title.toLowerCase();
-      if (titleLower.includes("reference") || titleLower.includes("bibliography")) {
-        extra.sections.forEach((sec) => {
-          if (sec.content) {
-            const lines = sec.content.split("\n").filter((l) => l.trim().length > 15);
-            nextModel.references.push(...lines);
-          }
-        });
-        fixesApplied.push(`Reclassified Chapter ${extra.number} ("${extra.title}") as Document References.`);
-      } else if (titleLower.includes("appendix") || titleLower.includes("appendices")) {
-        extra.sections.forEach((sec) => {
-          nextModel.appendices.push({
-            label: `Appendix ${nextModel.appendices.length + 1}`,
-            title: sec.title,
-            content: sec.content,
-          });
-        });
-        fixesApplied.push(`Reclassified Chapter ${extra.number} ("${extra.title}") as Document Appendices.`);
+      const cleanContent = sec.content?.trim() || "";
+      if (cleanContent.length > 15 || !/^\d+\.\d+[A-Z]?\b/i.test(sec.title)) {
+        rawSections.push({ origChap: ch.number, sec });
       } else {
-        const ch5 = nextModel.chapters[4];
-        if (ch5) {
-          ch5.sections.push(...extra.sections);
-          fixesApplied.push(`Merged Chapter ${extra.number} ("${extra.title}") sections into Chapter 5 ("${ch5.title}").`);
-        }
+        fixesApplied.push(`Pruned empty orphaned sub-chapter fragment "${sec.title}".`);
       }
     });
-  }
+  });
 
-  // Renumber remaining chapters sequentially 1..N
-  nextModel.chapters.forEach((ch, idx) => {
-    ch.number = idx + 1;
+  const binnedChapters: Section[][] = [[], [], [], [], []];
+
+  rawSections.forEach(({ origChap, sec }) => {
+    const titleLower = sec.title.toLowerCase();
+    const explicitMatch = sec.title.match(/^(\d+)\.\d+/);
+    let targetChap = origChap;
+
+    if (explicitMatch) {
+      const chapNum = parseInt(explicitMatch[1], 10);
+      if (chapNum >= 1 && chapNum <= 5) {
+        targetChap = chapNum;
+      }
+    } else {
+      if (
+        titleLower.includes("background") ||
+        titleLower.includes("introduction") ||
+        titleLower.includes("problem statement") ||
+        titleLower.includes("objective") ||
+        titleLower.includes("rationale") ||
+        titleLower.includes("justification") ||
+        titleLower.includes("significance") ||
+        titleLower.includes("scope") ||
+        titleLower.includes("delimitation")
+      ) {
+        targetChap = 1;
+      } else if (
+        titleLower.includes("literature") ||
+        titleLower.includes("theoretical framework") ||
+        titleLower.includes("related work") ||
+        titleLower.includes("conceptual review")
+      ) {
+        targetChap = 2;
+      } else if (
+        titleLower.includes("methodology") ||
+        titleLower.includes("research design") ||
+        titleLower.includes("system architecture") ||
+        titleLower.includes("system design") ||
+        titleLower.includes("work plan") ||
+        titleLower.includes("implementation plan")
+      ) {
+        targetChap = 3;
+      } else if (
+        titleLower.includes("results") ||
+        titleLower.includes("discussion") ||
+        titleLower.includes("evaluation") ||
+        titleLower.includes("findings")
+      ) {
+        targetChap = 4;
+      } else if (
+        titleLower.includes("conclusion") ||
+        titleLower.includes("recommendation") ||
+        titleLower.includes("future work")
+      ) {
+        targetChap = 5;
+      }
+    }
+
+    const binIdx = Math.max(0, Math.min(4, targetChap - 1));
+    sec.title = sec.title.replace(/^(?:\d+\.\d+(?:\.\d+)?[A-Z]?\s+)+/i, "").trim();
+    if (!sec.title) sec.title = `Section ${binIdx + 1}.${binnedChapters[binIdx].length + 1}`;
+    binnedChapters[binIdx].push(sec);
+  });
+
+  nextModel.chapters = binnedChapters.map((secs, idx) => {
+    const chapNum = idx + 1;
+    const existingChap = model.chapters[idx];
+    const title = existingChap?.title && !/^chapter\s+\d+/i.test(existingChap.title)
+      ? existingChap.title
+      : canonicalTitles[idx];
+
+    return {
+      number: chapNum,
+      title,
+      type: chapNum === 1 ? "INTRODUCTION" : chapNum === 2 ? "LITERATURE_REVIEW" : chapNum === 3 ? "METHODOLOGY" : chapNum === 4 ? "RESULTS" : "CONCLUSION",
+      intro: existingChap?.intro || "",
+      sections: secs.length > 0 ? secs : [
+        {
+          title: `Overview of Chapter ${chapNum}`,
+          content: `This chapter presents the ${canonicalTitles[idx].toLowerCase()} for the study.`,
+          startMarker: "",
+          endMarker: "",
+        }
+      ],
+      figures: existingChap?.figures || [],
+      tables: existingChap?.tables || [],
+    };
   });
 
   // 5. Dynamic Abbreviation Auto-Extraction from Document Content
