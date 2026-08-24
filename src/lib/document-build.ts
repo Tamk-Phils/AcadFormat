@@ -1548,79 +1548,9 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
     fixesApplied.push("Extracted Declaration text from body text into Preliminary Pages.");
   }
 
-  // 2. Preserve Original Chapter Structure & Clean Section Formatting (Faithful Editing Engine)
-  nextModel.chapters = nextModel.chapters.map((ch, idx) => {
-    const chapNum = ch.number || (idx + 1);
-
-    const cleanSections = ch.sections
-      .filter((sec) => {
-        const cleanContent = sec.content?.trim() || "";
-        // Only prune if section is completely empty
-        return cleanContent.length > 0;
-      })
-      .map((sec, secIdx) => {
-        let title = cleanTitle(sec.title).replace(/^(?:\d+\.)+\d*\s*/, "").trim();
-        if (!title) title = `Section ${chapNum}.${secIdx + 1}`;
-        return {
-          ...sec,
-          title,
-        };
-      });
-
-    return {
-      ...ch,
-      number: chapNum,
-      title: ch.title || `CHAPTER ${chapNum}`,
-      sections: cleanSections.length > 0 ? cleanSections : ch.sections,
-    };
-  });
-
-  // 5. Dynamic Abbreviation Auto-Extraction from Document Content
-  const knownAcronyms: Record<string, string> = {
-    FIM: "File Integrity Monitoring",
-    SHA: "Secure Hash Algorithm",
-    AES: "Advanced Encryption Standard",
-    API: "Application Programming Interface",
-    UI: "User Interface",
-    CPU: "Central Processing Unit",
-    RAM: "Random Access Memory",
-    OS: "Operating System",
-    DB: "Database",
-    HTTP: "Hypertext Transfer Protocol",
-    HTTPS: "Hypertext Transfer Protocol Secure",
-    JSON: "JavaScript Object Notation",
-    REST: "Representational State Transfer",
-    CLI: "Command Line Interface",
-    IDS: "Intrusion Detection System",
-    IPS: "Intrusion Prevention System",
-    SIEM: "Security Information and Event Management",
-    ML: "Machine Learning",
-    AI: "Artificial Intelligence",
-    SOC: "Security Operations Center",
-    DSR: "Design Science Research",
-    TOC: "Table of Contents",
-    URL: "Uniform Resource Locator",
-  };
-
-  const fullDocText = nextModel.chapters
-    .flatMap((c) => c.sections.map((s) => s.content))
-    .join(" ");
-
-  Object.entries(knownAcronyms).forEach(([abbr, meaning]) => {
-    const regex = new RegExp(`\\b${abbr}\\b`);
-    if (regex.test(fullDocText)) {
-      if (!nextModel.abbreviations.some((a) => a.abbreviation.toUpperCase() === abbr)) {
-        nextModel.abbreviations.push({
-          abbreviation: abbr,
-          meaning,
-          firstOccurrence: "",
-          definedInText: true,
-          requiresUserReview: false,
-          confidence: 95,
-        });
-        fixesApplied.push(`Auto-extracted and added abbreviation "${abbr}" (${meaning}) to List of Abbreviations.`);
-      }
-    }
+  // Clean preliminary pages: ensure borders are disabled on non-cover pages
+  nextModel.preliminary?.forEach((p) => {
+    p.hasPageBorder = false;
   });
 
   return {
