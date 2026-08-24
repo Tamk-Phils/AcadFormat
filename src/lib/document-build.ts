@@ -1517,19 +1517,56 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
   const fixesApplied: string[] = [];
   const nextModel: DocumentModel = JSON.parse(JSON.stringify(model));
 
-  // 1. Verify Cover Page & Preamble Cleanliness in Chapter 1 & Body Sections
+  // 1. Verify Cover Page, Declaration, Certification & Preamble Cleanliness in Chapter 1 & Body Sections
+  const declLines: string[] = [];
+  const certLines: string[] = [];
+
   nextModel.chapters.forEach((ch) => {
     ch.sections.forEach((sec) => {
       if (sec.content) {
         const origLines = sec.content.split("\n");
-        const cleanLines = origLines.filter((l) => !isPreambleNoiseLine(l));
+        const cleanLines: string[] = [];
+
+        for (const l of origLines) {
+          const lower = l.toLowerCase();
+          if (lower.includes("hereby declare the ownership") || lower.includes("record of my own research effort")) {
+            declLines.push(l);
+          } else if (lower.includes("this is to certify that this internship") || lower.includes("registration number uba")) {
+            certLines.push(l);
+          } else if (!isPreambleNoiseLine(l)) {
+            cleanLines.push(l);
+          }
+        }
+
         if (cleanLines.length < origLines.length && cleanLines.length > 0) {
           sec.content = cleanLines.join("\n").trim();
-          fixesApplied.push(`Stripped cover page / preamble metadata leakage from Chapter ${ch.number} section "${sec.title}".`);
+          fixesApplied.push(`Stripped cover page / preliminary metadata leakage from Chapter ${ch.number} section "${sec.title}".`);
         }
       }
     });
   });
+
+  if (declLines.length > 0) {
+    let declItem = nextModel.preliminary.find((p) => p.type === "DECLARATION");
+    if (!declItem) {
+      declItem = { type: "DECLARATION", title: "Declaration", content: "", present: true };
+      nextModel.preliminary.push(declItem);
+    }
+    declItem.content = declLines.join("\n\n");
+    declItem.present = true;
+    fixesApplied.push("Extracted Declaration text from body text into Preliminary Pages.");
+  }
+
+  if (certLines.length > 0) {
+    let certItem = nextModel.preliminary.find((p) => p.type === "CERTIFICATION");
+    if (!certItem) {
+      certItem = { type: "CERTIFICATION", title: "Certification", content: "", present: true };
+      nextModel.preliminary.push(certItem);
+    }
+    certItem.content = certLines.join("\n\n");
+    certItem.present = true;
+    fixesApplied.push("Extracted Certification text from body text into Preliminary Pages.");
+  }
 
   // 2. Verify Sub-Chapter Completeness (No empty/orphaned sub-chapters)
   nextModel.chapters.forEach((ch) => {

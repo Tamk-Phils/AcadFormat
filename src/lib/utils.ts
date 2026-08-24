@@ -63,23 +63,65 @@ export function isPreambleNoiseLine(line: string): boolean {
   const norm = line.trim().toLowerCase();
   if (!norm) return false;
 
+  // Declarations & Certifications
   if (
-    /^(?:building capacities|department of|a dissertation proposal|a thesis proposal|in partial fulfilment|in partial fulfillment|college of technology|university of bamenda|by:|supervisor:|degree of author|master of technology|m\.tech|b\.tech|ph\.d|august \d{4}|january|february|march|april|may|june|july|september|october|november|december)/i.test(norm)
+    norm.includes("hereby declare the ownership") ||
+    norm.includes("record of my own research effort") ||
+    norm.includes("hasn't been presented before") ||
+    norm.includes("all borrowed ideas have been duly acknowledged") ||
+    norm.includes("this is to certify that this internship") ||
+    norm.includes("done by ngoh janice ambu") ||
+    norm.includes("higher institute of commerce and management") ||
+    norm.includes("academic supervisor:") ||
+    norm.includes("field supervisor:") ||
+    norm.includes("head of department")
   ) {
     return true;
   }
+
+  // Signature lines & date placeholders
+  if (
+    /^(?:signature|date)[:\s\.–—]*$/i.test(norm) ||
+    /^(?:date|signature)\s*[\.\_\-]{3,}\s*(?:signature|date)\s*[\.\_\-]{3,}/i.test(norm) ||
+    /^\w+\s+signature[\.\_\-\s]*$/i.test(norm)
+  ) {
+    return true;
+  }
+
+  // Orphan/duplicate table & figure placeholders
+  if (
+    /^figure\s+\d+\.\d+(?:\s*:\s*figure\s+\d+\.\d+)?$/i.test(norm) ||
+    /^table\s+\d+\.\d+\s*:\s*date/i.test(norm) ||
+    /^figure\s+\d+\.\d+$/i.test(norm)
+  ) {
+    return true;
+  }
+
+  if (
+    /^(?:building capacities|department of|a dissertation proposal|a thesis proposal|an internship report|in partial fulfilment|in partial fulfillment|college of technology|university of bamenda|by:|supervisor:|degree of author|master of technology|m\.tech|b\.tech|ph\.d|august \d{4}|january|february|march|april|may|june|july|september|october|november|december)/i.test(norm)
+  ) {
+    return true;
+  }
+
   if (
     /^(?:certification|declaration|dedication|acknowledgement|acknowledgments|table of contents|list of figures|list of tables|list of abbreviations|abstract)\b/i.test(norm) &&
-    norm.length < 60
+    norm.length < 100
   ) {
     return true;
   }
+
   if (/^\[degree of author/i.test(norm) || /^\[title of proposal/i.test(norm) || /^\[author name/i.test(norm)) {
     return true;
   }
-  if (norm.includes("a dissertation proposal submitted to the department") || norm.includes("in partial fulfilment of the requirements")) {
+
+  if (
+    norm.includes("a dissertation proposal submitted to the department") ||
+    norm.includes("in partial fulfilment of the requirements") ||
+    norm.includes("registration number uba")
+  ) {
     return true;
   }
+
   return false;
 }
 
