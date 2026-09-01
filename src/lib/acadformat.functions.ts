@@ -153,7 +153,7 @@ export const formatDocument = createServerFn({ method: "POST" })
     const { supabase } = context;
     const { data: row, error } = await supabase
       .from("documents")
-      .select("id, model, preservation_snapshot")
+      .select("id, model")
       .eq("id", data.documentId)
       .single();
     if (error || !row?.model) throw new Error("This document has not been analysed yet.");
@@ -168,16 +168,25 @@ export const formatDocument = createServerFn({ method: "POST" })
     const config = resolveConfig(data.selection);
     const final = buildFinalDocument({ model: alignedModel, config, selection: data.selection });
 
-    // ── Integrity Validation ────────────────────────────────────────
-    const snapshot = row.preservation_snapshot as any ?? null;
-    const integrityReport = snapshot
-      ? validateIntegrity(snapshot, final, alignedModel)
-      : null;
-
-    if (integrityReport && !integrityReport.pass) {
-      console.error("[Integrity] FORMAT FAILED:", integrityReport.errors);
-    } else if (integrityReport?.warnings.length) {
-      console.warn("[Integrity] Format warnings:", integrityReport.warnings);
+    // ── Integrity Validation (guarded — column may not exist yet) ────────────
+    let integrityReport = null;
+    try {
+      const { data: snapRow } = await supabase
+        .from("documents")
+        .select("preservation_snapshot")
+        .eq("id", row.id)
+        .single();
+      const snapshot = (snapRow as any)?.preservation_snapshot ?? null;
+      if (snapshot) {
+        integrityReport = validateIntegrity(snapshot, final, alignedModel);
+        if (!integrityReport.pass) {
+          console.error("[Integrity] FORMAT FAILED:", integrityReport.errors);
+        } else if (integrityReport.warnings.length) {
+          console.warn("[Integrity] Format warnings:", integrityReport.warnings);
+        }
+      }
+    } catch {
+      // Column not yet created — integrity check skipped gracefully
     }
 
     const audit = {
@@ -206,7 +215,7 @@ export const exportDocx = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
-      .select("file_name, model, institution, preservation_snapshot")
+      .select("file_name, model, institution")
       .eq("id", data.documentId)
       .single();
     if (error || !row?.model) throw new Error("Format the document before exporting.");
@@ -216,22 +225,29 @@ export const exportDocx = createServerFn({ method: "POST" })
     const config = resolveConfig(selection ?? { configId: "" });
     const final = buildFinalDocument({ model, config, selection });
 
-    // ── Integrity gate ───────────────────────────────────────────
-    // Block the export if critical content was lost vs. the original upload.
-    const snapshot = (row as any).preservation_snapshot ?? null;
-    if (snapshot) {
-      const report = validateIntegrity(snapshot, final, model);
-      if (!report.pass) {
-        const summary = report.errors.join(" | ");
-        console.error(`[Integrity] DOCX export BLOCKED: ${summary}`);
-        throw new Error(
-          `Export blocked — the document lost significant content during processing. ` +
-          `${summary} Please re-analyse the document and try again.`
-        );
+    // ── Integrity gate (guarded — column may not exist yet) ──────────────
+    try {
+      const { data: snapRow } = await context.supabase
+        .from("documents")
+        .select("preservation_snapshot")
+        .eq("id", data.documentId)
+        .single();
+      const snapshot = (snapRow as any)?.preservation_snapshot ?? null;
+      if (snapshot) {
+        const report = validateIntegrity(snapshot, final, model);
+        if (!report.pass) {
+          const summary = report.errors.join(" | ");
+          console.error(`[Integrity] DOCX export BLOCKED: ${summary}`);
+          throw new Error(
+            `Export blocked — the document lost significant content during processing. ` +
+            `${summary} Please re-analyse the document and try again.`
+          );
+        }
+        if (report.warnings.length) console.warn("[Integrity] DOCX warnings:", report.warnings);
       }
-      if (report.warnings.length) {
-        console.warn("[Integrity] DOCX export warnings:", report.warnings);
-      }
+    } catch (e: any) {
+      // Re-throw real integrity failures; swallow missing-column errors
+      if (e.message?.startsWith("Export blocked")) throw e;
     }
 
     const images = new Map<string, ImageAsset>();
@@ -283,7 +299,7 @@ export const exportPdf = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: row, error } = await context.supabase
       .from("documents")
-      .select("file_name, model, institution, preservation_snapshot")
+      .select("file_name, model, institution")
       .eq("id", data.documentId)
       .single();
     if (error || !row?.model) throw new Error("Format the document before exporting.");
@@ -293,21 +309,29 @@ export const exportPdf = createServerFn({ method: "POST" })
     const config = resolveConfig(selection ?? { configId: "" });
     const final = buildFinalDocument({ model, config, selection });
 
-    // ── Integrity gate ───────────────────────────────────────────
-    const snapshot = (row as any).preservation_snapshot ?? null;
-    if (snapshot) {
-      const report = validateIntegrity(snapshot, final, model);
-      if (!report.pass) {
-        const summary = report.errors.join(" | ");
-        console.error(`[Integrity] PDF export BLOCKED: ${summary}`);
-        throw new Error(
-          `Export blocked — the document lost significant content during processing. ` +
-          `${summary} Please re-analyse the document and try again.`
-        );
+    // ── Integrity gate (guarded — column may not exist yet) ──────────────
+    try {
+      const { data: snapRow } = await context.supabase
+        .from("documents")
+        .select("preservation_snapshot")
+        .eq("id", data.documentId)
+        .single();
+      const snapshot = (snapRow as any)?.preservation_snapshot ?? null;
+      if (snapshot) {
+        const report = validateIntegrity(snapshot, final, model);
+        if (!report.pass) {
+          const summary = report.errors.join(" | ");
+          console.error(`[Integrity] PDF export BLOCKED: ${summary}`);
+          throw new Error(
+            `Export blocked — the document lost significant content during processing. ` +
+            `${summary} Please re-analyse the document and try again.`
+          );
+        }
+        if (report.warnings.length) console.warn("[Integrity] PDF warnings:", report.warnings);
       }
-      if (report.warnings.length) {
-        console.warn("[Integrity] PDF export warnings:", report.warnings);
-      }
+    } catch (e: any) {
+      // Re-throw real integrity failures; swallow missing-column errors
+      if (e.message?.startsWith("Export blocked")) throw e;
     }
 
     const images = new Map<string, { data: Uint8Array; contentType: string }>();
@@ -467,7 +491,7 @@ export const chatEditDocumentFn = createServerFn({ method: "POST" })
     const { supabase } = context;
     const { data: row, error } = await supabase
       .from("documents")
-      .select("id, model, preservation_snapshot")
+      .select("id, model")
       .eq("id", data.documentId)
       .single();
     if (error || !row?.model) throw new Error("This document has not been analysed yet.");
@@ -493,16 +517,23 @@ export const chatEditDocumentFn = createServerFn({ method: "POST" })
     const config = resolveConfig(data.selection);
     const final = buildFinalDocument({ model: updatedModel, config, selection: data.selection });
 
-    // ── Post-edit integrity check ──────────────────────────────────────────
-    // Warn if the AI chat edit caused significant word loss (the chapter
-    // erasure guard in ai.server.ts handles rollback; this logs for the UI).
-    const snapshot = (row as any).preservation_snapshot ?? null;
-    const integrityReport = snapshot
-      ? validateIntegrity(snapshot, final, updatedModel)
-      : null;
-
-    if (integrityReport && !integrityReport.pass) {
-      console.warn("[Integrity] Chat-edit result has integrity issues:", integrityReport.errors);
+    // ── Post-edit integrity check (guarded — column may not exist yet) ────
+    let integrityReport = null;
+    try {
+      const { data: snapRow } = await supabase
+        .from("documents")
+        .select("preservation_snapshot")
+        .eq("id", row.id)
+        .single();
+      const snapshot = (snapRow as any)?.preservation_snapshot ?? null;
+      if (snapshot) {
+        integrityReport = validateIntegrity(snapshot, final, updatedModel);
+        if (!integrityReport.pass) {
+          console.warn("[Integrity] Chat-edit result has integrity issues:", integrityReport.errors);
+        }
+      }
+    } catch {
+      // Column not yet created — integrity check skipped gracefully
     }
 
     const audit = {
