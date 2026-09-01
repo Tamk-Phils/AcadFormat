@@ -8,6 +8,8 @@ import { buildPdf } from "./pdf-export.server";
 import { extractDocument } from "./extract.server";
 import { analyzeWithAI, chatEditDocument } from "./ai.server";
 import { restoreVerbatimContent } from "./verbatim";
+import { preserveDocument } from "./preservation";
+import { validateIntegrity } from "./integrity";
 import { getLogoBytes } from "./static-assets";
 import { ensureDocumentsBucket } from "./storage-bootstrap.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -113,6 +115,16 @@ export const analyzeDocument = createServerFn({ method: "POST" })
         original: extracted.original,
       });
 
+      // ── Preservation Snapshot ──────────────────────────────────────────
+      // Capture an immutable snapshot of the original document BEFORE any
+      // formatting. The integrity validator uses this later on every export.
+      const snapshot = preserveDocument(
+        extracted.text,
+        extracted.original,
+        extracted.tableCount,
+        extracted.imageCount,
+      );
+
       await supabase
         .from("documents")
         .update({
@@ -121,6 +133,8 @@ export const analyzeDocument = createServerFn({ method: "POST" })
           understanding: toJson(analysis.understanding),
           model: toJson(alignedModel),
           health: toJson(analysis.health),
+          // Store snapshot for later integrity validation
+          preservation_snapshot: toJson(snapshot),
         })
         .eq("id", row.id);
 

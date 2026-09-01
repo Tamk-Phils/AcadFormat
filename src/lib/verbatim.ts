@@ -123,8 +123,9 @@ export function restoreVerbatimContent(model: DocumentModel, sourceText: string)
 
     const section = next.chapters[anchor.chapter]?.sections[anchor.section];
     if (!section) return;
-    // Only replace when the original text is richer than what the model returned.
-    if (slice.length > (section.content || "").length) section.content = slice;
+    // Verbatim ALWAYS wins — the author's original text is the source of truth.
+    // We never let an AI paraphrase (even a longer one) replace the real text.
+    if (slice.length > 20) section.content = slice;
   });
 
   // Helper for word representation of numbers 1..5

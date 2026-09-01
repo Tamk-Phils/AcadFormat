@@ -1,5 +1,6 @@
 import type { AnalysisResult, DocumentModel } from "./document-model";
 import { isPreambleNoiseLine } from "./utils";
+import { detectChatEditErasure } from "./integrity";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-pro";
@@ -453,7 +454,7 @@ ${input.text.slice(0, MAX_CHARS)}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(90_000),  // 90 s — large dissertations need time
       });
 
       if (response.status === 429) {
@@ -674,13 +675,10 @@ ${input.selectedText || "(None)"}`,
 
       // Re-normalize the modified model to keep numbering/IDs correct
       if (parsed.model) {
-        if (input.model.original) {
-          parsed.model.original = input.model.original;
-        }
-        if (input.model.images) {
-          parsed.model.images = input.model.images;
-        }
-        
+        // Preserve immutable fields that AI must never touch
+        if (input.model.original) parsed.model.original = input.model.original;
+        if (input.model.images)   parsed.model.images   = input.model.images;
+
         const normalizedResult = normalize({
           model: parsed.model,
           understanding: {} as any,
@@ -688,6 +686,18 @@ ${input.selectedText || "(None)"}`,
           issues: [],
         });
         parsed.model = normalizedResult.model;
+
+        // ── Chat-edit chapter erasure guard ──────────────────────────────
+        // If the AI silently wiped ≥30 % of a chapter's words, roll that
+        // chapter back to the original to prevent content loss.
+        const erasures = detectChatEditErasure(input.model, parsed.model);
+        if (erasures.length > 0) {
+          console.warn(`[AI-Chat] Erasure guard triggered for ${erasures.length} chapter(s). Rolling back.`);
+          erasures.forEach(({ chapter }) => {
+            const origChap = input.model.chapters[chapter - 1];
+            if (origChap) parsed.model.chapters[chapter - 1] = JSON.parse(JSON.stringify(origChap));
+          });
+        }
       }
 
       console.log(`[AI-Chat] Document edit succeeded using ${provider}!`);
