@@ -31,7 +31,7 @@ import {
   getOriginalDocument,
   chatEditDocumentFn,
 } from "@/lib/acadformat.functions";
-import { buildFinalDocument, auditFinalDocument } from "@/lib/document-build";
+import { buildFinalDocument, auditFinalDocument, verifyAndAlignDocumentModel } from "@/lib/document-build";
 import {
   ACADEMIC_LEVEL_NAMES,
   DOCUMENT_TYPES,
