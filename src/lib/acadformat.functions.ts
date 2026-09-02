@@ -10,6 +10,7 @@ import { analyzeWithAI, chatEditDocument } from "./ai.server";
 import { restoreVerbatimContent } from "./verbatim";
 import { preserveDocument } from "./preservation";
 import { validateIntegrity } from "./integrity";
+import { runVerificationAudit } from "./audit.server";
 import { getLogoBytes } from "./static-assets";
 import { ensureDocumentsBucket } from "./storage-bootstrap.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -195,6 +196,48 @@ export const formatDocument = createServerFn({ method: "POST" })
       integrity: integrityReport,
     };
 
+    // ── Verification Audit & Admin Telemetry ────────────────────────────────
+    let verificationAuditResult = null;
+    try {
+      const { data: snapRow } = await supabase
+        .from("documents")
+        .select("preservation_snapshot, raw_text")
+        .eq("id", row.id)
+        .single();
+      const originalText = (snapRow as any)?.raw_text ?? "";
+      verificationAuditResult = runVerificationAudit({
+        documentId: row.id,
+        userId: context.userId,
+        final,
+        model: alignedModel,
+        originalText,
+      });
+
+      // Persist alert to admin_alerts table (fire-and-forget, non-blocking)
+      if (verificationAuditResult.adminAlert.alertTriggered) {
+        supabaseAdmin
+          .from("admin_alerts" as any)
+          .insert({
+            user_id: context.userId,
+            document_id: row.id,
+            severity: verificationAuditResult.adminAlert.severity,
+            triggered: true,
+            checks: toJson(verificationAuditResult.verificationAudit.checks),
+            persistent_errors: toJson(verificationAuditResult.adminAlert.persistentErrors),
+            reconstruction_status: verificationAuditResult.reconstructionStatus,
+            download_ready: verificationAuditResult.downloadReady,
+          })
+          .then(({ error }) => {
+            if (error) console.warn("[Audit] Failed to store admin alert:", error.message);
+            else console.log(`[Audit] Admin alert stored — severity: ${verificationAuditResult!.adminAlert.severity}`);
+          });
+      } else {
+        console.log("[Audit] All 7 verification checks PASSED. No admin alert required.");
+      }
+    } catch (auditErr: any) {
+      console.warn("[Audit] Verification audit failed gracefully:", auditErr?.message);
+    }
+
     await supabase
       .from("documents")
       .update({
@@ -206,7 +249,7 @@ export const formatDocument = createServerFn({ method: "POST" })
       })
       .eq("id", row.id);
 
-    return { ok: true as const, audit };
+    return { ok: true as const, audit, verificationAudit: verificationAuditResult };
   });
 
 export const exportDocx = createServerFn({ method: "POST" })

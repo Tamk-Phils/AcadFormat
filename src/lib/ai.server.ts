@@ -514,13 +514,14 @@ function normalize(result: AnalysisResult): AnalysisResult {
         ...figure,
         id: figure.id || `c${index + 1}f${i + 1}`,
         chapter: index + 1,
-        caption: figure.caption?.trim() || "REQUIRES_USER_REVIEW",
+        // Never inject REQUIRES_USER_REVIEW — use blank fallback instead
+        caption: (figure.caption?.trim() || "").replace(/\bREQUIRES_USER_REVIEW\b/g, "").trim(),
       })),
       tables: (chapter.tables || []).map((table, i) => ({
         ...table,
         id: table.id || `c${index + 1}t${i + 1}`,
         chapter: index + 1,
-        title: table.title?.trim() || "REQUIRES_USER_REVIEW",
+        title: (table.title?.trim() || "").replace(/\bREQUIRES_USER_REVIEW\b/g, "").trim(),
       })),
     }));
 
@@ -559,9 +560,19 @@ function normalize(result: AnalysisResult): AnalysisResult {
       meta: model.meta || { title: "Untitled work", author: "" },
       preliminary: model.preliminary || [],
       chapters,
-      references: model.references || [],
+      references: (model.references || [])
+        .map((r: string) => (typeof r === "string" ? r : String(r)).trim())
+        .filter((r: string) => r && r !== "undefined" && r !== "null"),
       appendices: model.appendices || [],
-      abbreviations: model.abbreviations || [],
+      // Strip any undefined/null abbreviation entries the AI slipped through
+      abbreviations: (model.abbreviations || [])
+        .filter((a: any) => a && (a.abbreviation || a.term) && (a.meaning || a.definition))
+        .map((a: any) => ({
+          abbreviation: (a.abbreviation || a.term || "").replace(/\bREQUIRES_USER_REVIEW\b/g, "").trim(),
+          meaning: (a.meaning || a.definition || "").replace(/\bREQUIRES_USER_REVIEW\b/g, "").trim(),
+          firstOccurrence: a.firstOccurrence,
+        }))
+        .filter((a: any) => a.abbreviation && a.meaning),
       images: model.images || (result as any).model?.images || [],
       original: model.original || (result as any).model?.original || [],
     },
