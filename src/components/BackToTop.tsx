@@ -6,14 +6,33 @@ export function BackToTop() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      // Check window scroll position or scrollable main element
-      const scrollY = window.scrollY || document.documentElement.scrollTop;
-      setIsVisible(scrollY > 250);
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target && target.scrollTop !== undefined) {
+        setIsVisible(target.scrollTop > 250);
+      }
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    const attachScrollListeners = () => {
+      const scrollableContainers = document.querySelectorAll('.overflow-y-auto, .overflow-auto');
+      scrollableContainers.forEach(container => {
+        container.addEventListener("scroll", handleScroll, { passive: true });
+      });
+      window.addEventListener("scroll", () => {
+        setIsVisible(window.scrollY > 250);
+      }, { passive: true });
+    };
+
+    // Attach initially and set up a mutation observer to catch dynamically added containers
+    attachScrollListeners();
+    
+    const observer = new MutationObserver(() => attachScrollListeners());
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", () => {});
+    };
   }, []);
 
   const scrollToTop = () => {
