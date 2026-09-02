@@ -325,8 +325,15 @@ const NUMBERED_ITEM_REGEX = new RegExp(
 
 function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: boolean): boolean {
   const prev = prevLine.trim();
-  const curr = currLine.trim();
+  let curr = currLine.trim();
   if (!prev || !curr) return false;
+
+  // Clean leading period artifact (e.g. ". Organisations...")
+  curr = curr.replace(/^\.\s+(?=[A-Z0-9\(\)])/, "");
+  // Clean leading em-dash/en-dash/hyphen artifact when not a list item marker (e.g. " — for example...")
+  if (!BULLET_ITEM_REGEX.test(curr)) {
+    curr = curr.replace(/^[—–\-]\s+/, "");
+  }
 
   // Never merge a line that starts with a list marker — it's a new list item
   if (NUMBERED_ITEM_REGEX.test(curr) || BULLET_ITEM_REGEX.test(curr)) return false;
@@ -472,12 +479,20 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   };
 
   for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i]!.trim();
+    let line = lines[i]!.trim();
     if (!line) {
       hasEmptyLine = true;
       if (inTable) flushTable();
       flushCode();
       continue;
+    }
+
+    // Clean leading PDF/OCR leading period artifacts (e.g. ". Organisations..." -> "Organisations...")
+    line = line.replace(/^\.\s+(?=[A-Z0-9\(\)])/, "");
+
+    // Clean leading em-dash/en-dash/hyphen artifacts when NOT a valid bullet item (e.g. " — for example..." -> "for example...")
+    if (!BULLET_ITEM_REGEX.test(line)) {
+      line = line.replace(/^[—–\-]\s+/, "");
     }
 
     // Skip page headers & footers (e.g. "Page 1", "Basic VLAN Configuration - Lab Guide...")
@@ -545,7 +560,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       /^Device\s*\(Hostname\)\s+Interface/i.test(line) ||
       /^Ports\s+Assignment\s+Network/i.test(line) ||
       /\t/.test(line) ||
-      (line.includes("  ") && line.split(/\s{2,}/).filter((s) => s.trim()).length >= 3);
+      (line.includes("  ") && line.split(/\s{2,}/).filter((s: any) => s.trim()).length >= 3);
 
     const isTableRow =
       !isCodeLine(line) &&
@@ -553,7 +568,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         isExplicitPipeTable ||
         isDivider ||
         isExplicitTableLine ||
-        (inTable && line.split(/\s{2,}/).filter((s) => s.trim()).length >= 2) ||
+        (inTable && line.split(/\s{2,}/).filter((s: any) => s.trim()).length >= 2) ||
         (isCaptionLine && checkNextIsTable()));
 
     if (isTableRow) {
@@ -621,7 +636,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
               flushPara();
             }
           }
-          pendingPara.push(line);
+          pendingPara.push(cleanLine);
           hasEmptyLine = false;
         }
       }
@@ -1030,8 +1045,8 @@ export function buildFinalDocument(input: any): FinalDocument {
         imageId = `img-${f}`;
       }
 
-      const exactMatch = model.images?.find((img) => img.id === imageId);
-      const fallbackImage = model.images?.find((img) => img.role === "figure") || model.images?.[f];
+      const exactMatch = model.images?.find((img: any) => img.id === imageId);
+      const fallbackImage = model.images?.find((img: any) => img.role === "figure") || model.images?.[f];
 
       if (exactMatch) {
         blocks.push({ type: "image", text: figure.caption, imageId: exactMatch.id });
@@ -1195,7 +1210,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       { type: "spacer" as const, text: "" },
       { type: "center" as const, text: "SUPERVISOR(S):", bold: true },
       ...(meta.supervisors?.length
-        ? meta.supervisors.map((s) => ({ type: "center" as const, text: s.toUpperCase(), bold: true }))
+        ? meta.supervisors.map((s: any) => ({ type: "center" as const, text: s.toUpperCase(), bold: true }))
         : [{ type: "center" as const, text: "—", bold: true }]),
       { type: "spacer" as const, text: "" },
       { type: "center" as const, text: (meta.monthYear || "").toUpperCase(), bold: true }
@@ -1265,7 +1280,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       { type: "spacer" as const, text: "" },
       { type: "center" as const, text: "SUPERVISOR(S):" },
       ...(meta.supervisors?.length
-        ? meta.supervisors.map((s) => ({ type: "center" as const, text: s }))
+        ? meta.supervisors.map((s: any) => ({ type: "center" as const, text: s }))
         : [{ type: "center" as const, text: "—" }]),
       { type: "center" as const, text: (meta.monthYear || "").toUpperCase() }
     );
@@ -1307,7 +1322,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       // Chunk layout based on the full size of completeTOC
       addPrelim(type, "Table of Contents", [
         { type: "heading1", text: "TABLE OF CONTENTS" },
-        ...completeTOC.map((entry) => ({
+        ...completeTOC.map((entry: any) => ({
           type: "listline" as const,
           level: entry.level,
           bold: entry.level === 1,
@@ -1320,7 +1335,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       addPrelim(type, "List of Figures", [
         { type: "heading1", text: "LIST OF FIGURES" },
         ...(listOfFigures.length
-          ? listOfFigures.map((entry) => ({
+          ? listOfFigures.map((entry: any) => ({
               type: "listline" as const,
               text: `${entry.label}: ${entry.text}\t${entry.page}`,
             }))
@@ -1332,7 +1347,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       addPrelim(type, "List of Tables", [
         { type: "heading1", text: "LIST OF TABLES" },
         ...(listOfTables.length
-          ? listOfTables.map((entry) => ({
+          ? listOfTables.map((entry: any) => ({
               type: "listline" as const,
               text: `${entry.label}: ${entry.text}\t${entry.page}`,
             }))
@@ -1344,7 +1359,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       addPrelim(type, "List of Abbreviations", [
         { type: "heading1", text: "LIST OF ABBREVIATIONS" },
         ...(listOfAbbreviations.length
-          ? listOfAbbreviations.map((entry) => ({
+          ? listOfAbbreviations.map((entry: any) => ({
               type: "listline" as const,
               text: `${entry.label}\t${entry.text}`,
             }))
@@ -1353,7 +1368,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       continue;
     }
 
-    const existing = (model?.preliminary || []).find((p) => p.type === type);
+    const existing = (model?.preliminary || []).find((p: any) => p.type === type);
     const content = existing?.content?.trim();
 
     if (isUba && isFinalYearWork) {
@@ -1387,7 +1402,7 @@ export function buildFinalDocument(input: any): FinalDocument {
             { type: "para", text: `Supervisor (s)`, bold: true },
             { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR 1").toUpperCase()} : __________________________________________________` },
             ...(meta.supervisors && meta.supervisors.length > 1
-              ? meta.supervisors.slice(1).map(s => ({
+              ? meta.supervisors.slice(1).map((s: any) => ({
                   type: "para" as const,
                   text: `Pr. ${s.toUpperCase()} : __________________________________________________`
                 }))
@@ -1521,7 +1536,7 @@ export function buildFinalDocument(input: any): FinalDocument {
   if (tocStartIndex !== undefined) {
     const tocBlocks: Block[] = [
       { type: "heading1", text: "TABLE OF CONTENTS" },
-      ...completeTOC.map((entry) => ({
+      ...completeTOC.map((entry: any) => ({
         type: "listline" as const,
         level: entry.level,
         bold: entry.level === 1,
@@ -1627,7 +1642,7 @@ export function verifyAndAlignDocumentModel(model: DocumentModel): { model: Docu
   });
 
   if (declLines.length > 0) {
-    let declItem = nextModel.preliminary.find((p) => p.type === "DECLARATION");
+    let declItem = nextModel.preliminary.find((p: any) => p.type === "DECLARATION");
     if (!declItem) {
       declItem = { type: "DECLARATION", title: "Declaration", content: "", present: true };
       nextModel.preliminary.push(declItem);
