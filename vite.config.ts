@@ -10,4 +10,14 @@ export default defineConfig({
   nitro: {
     preset: "vercel",
   },
+  vite: {
+    build: {
+      rolldownOptions: {
+        external: ['path', 'fs', 'url', 'events', 'process', 'stream', 'util', 'buffer', 'assert', 'crypto']
+      },
+      rollupOptions: {
+        external: ['path', 'fs', 'url', 'events', 'process', 'stream', 'util', 'buffer', 'assert', 'crypto']
+      }
+    }
+  }
 });
