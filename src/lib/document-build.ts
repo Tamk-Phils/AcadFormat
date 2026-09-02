@@ -8,6 +8,7 @@ import type {
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
 import { resolveConfig, workLabel, COMMON_CONFIG } from "./institutions";
 import { parseTableRows, isPreambleNoiseLine } from "./utils";
+import { reassembleReferences } from "./references";
 
 /** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
 const CHARS_PER_PAGE = 2900;
@@ -1012,9 +1013,10 @@ export function buildFinalDocument(input: any): FinalDocument {
     });
 
     // Handle any figures/tables defined in metadata but not encountered in section content:
-    for (let f = 0; f < chapter.figures.length; f += 1) {
+    const chapFigures = chapter.figures || [];
+    for (let f = 0; f < chapFigures.length; f += 1) {
       if (consumedFigures.has(f)) continue;
-      const figure = chapter.figures[f]!;
+      const figure = chapFigures[f]!;
       const label =
         config.figureNumbering === "chapter"
           ? `Figure ${chapterNumber}.${f + 1}`
@@ -1092,13 +1094,7 @@ export function buildFinalDocument(input: any): FinalDocument {
   const refs = [...(model?.references ?? []), ...extractedRefs];
   if (refs.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "REFERENCES" }];
-    const safeRefs = refs
-      .map(r => typeof r === "string" ? r : (r as any)?.text || (r as any)?.title || String(r || ""))
-      .map(r => r.replace(/\bREQUIRES_USER_REVIEW\b/g, "").replace(/^[—–]\s+/, "").trim())
-      .filter(r => r.length > 0 && r !== "undefined" && r !== "null")
-      // Deduplicate: normalise whitespace then unique
-      .filter((r, idx, arr) => arr.findIndex(x => x.replace(/\s+/g, " ") === r.replace(/\s+/g, " ")) === idx)
-      .sort((a, b) => a.localeCompare(b));
+    const safeRefs = reassembleReferences(refs).sort((a, b) => a.localeCompare(b));
     safeRefs.forEach((reference) => blocks.push({ type: "reference", text: reference }));
     const page = pushBody("References", blocks, "back");
     toc.push({ label: "", text: "REFERENCES", page: String(page), level: 1 });

@@ -1,6 +1,7 @@
 import type { AnalysisResult, DocumentModel } from "./document-model";
 import { isPreambleNoiseLine } from "./utils";
 import { detectChatEditErasure } from "./integrity";
+import { reassembleReferences } from "./references";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-2.5-pro";
@@ -114,7 +115,7 @@ function resolveAIProvider(provider: AIProvider): ProviderConfig {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${geminiKey}`,
         },
-        model: process.env["GEMINI_MODEL"] || "gemini-3.5-flash",
+        model: process.env["GEMINI_MODEL"] || "gemini-2.5-flash",
       };
     case "openrouter":
       return {
@@ -471,7 +472,7 @@ ${input.text.slice(0, MAX_CHARS)}`,
         method: "POST",
         headers: config.headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(90_000),  // 90 s — large dissertations need time
+        signal: AbortSignal.timeout(20_000),  // 90 s — large dissertations need time
       });
 
       if (response.status === 429) {
@@ -562,9 +563,7 @@ function normalize(result: AnalysisResult): AnalysisResult {
       meta: model.meta || { title: "Untitled work", author: "" },
       preliminary: model.preliminary || [],
       chapters,
-      references: (model.references || [])
-        .map((r: string) => (typeof r === "string" ? r : String(r)).trim())
-        .filter((r: string) => r && r !== "undefined" && r !== "null"),
+      references: reassembleReferences(model.references || []),
       appendices: model.appendices || [],
       // Strip any undefined/null abbreviation entries the AI slipped through
       abbreviations: (model.abbreviations || [])
