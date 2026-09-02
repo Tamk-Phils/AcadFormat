@@ -45,10 +45,14 @@ export function validateIntegrity(
   const warnings: string[] = [];
   const errors: string[] = [];
 
-  // ── Words ──────────────────────────────────────────────────────────────
+  // ── Words ──────────────────────────────────────────────────────────────────
+  // Count ALL text-bearing block types — not just para/heading.
+  // Excluding listline, reference, bullet, center, caption, code caused
+  // severe false-positive "content loss" errors even when content was intact.
+  const NON_TEXT_TYPES = new Set(["image", "logos", "spacer", "table", "bilingual", "ubaHeader"]);
   const finalText = final.pages
     .flatMap((p) => p.blocks)
-    .filter((b) => b.type === "para" || b.type === "heading1" || b.type === "heading2")
+    .filter((b) => !NON_TEXT_TYPES.has(b.type) && b.text)
     .map((b) => b.text)
     .join(" ");
 
