@@ -301,9 +301,10 @@ function isOriginalSectionTitle(line: string, chapter?: any, allChapters?: any[]
   return false;
 }
 
-const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•";
+const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•→—–";
 const BULLET_SPLIT_REGEX = new RegExp(`\\s*(?=[${BULLET_CHARS}])`);
-const LIST_ITEM_REGEX = /^\s*(?:[-*•+➢➤✓✔▪▫♦○●■▲▼◦]\s*|[a-zA-Z0-9]+[.)]\s+|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\)\s*|(?:Data Ingestion Layer|Feature Extraction Layer|Detection Engine Layer|Decision and Alerting Layer|Presentation Layer|Programming and modelling:|NLP processing:|Service architecture:|Dashboard:|Version control and documentation:))/i;
+const BULLET_ITEM_REGEX = new RegExp(`^\\s*[-*+${BULLET_CHARS}]\\s+`, "i");
+const NUMBERED_ITEM_REGEX = /^\s*(?:[a-zA-Z0-9]+[.)]\s+|Q\d+[.)]?\s+|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x|[a-zA-Z0-9]+)\)\s*)/i;
 
 function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: boolean): boolean {
   const prev = prevLine.trim();
@@ -411,22 +412,6 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
 
     if (rawRows.length > 0) {
       const fullText = rawRows.flatMap((r) => r).join(" ");
-      const sectionMatches = fullText.match(/\b\d+\.\d+\s+[A-Za-z]/g) || [];
-
-      // If this table is actually a list of sub-chapter section headings (e.g. 1.1 Background, 1.2 Description...),
-      // DO NOT turn it into a table! Unpack rows as normal paragraphs.
-      if (sectionMatches.length >= 2) {
-        rawRows.forEach((row) => {
-          const lineText = row.filter(Boolean).join(" ").trim();
-          if (lineText) {
-            blocks.push({ type: "para", text: lineText });
-          }
-        });
-        tableLines = [];
-        inTable = false;
-        return;
-      }
-
       const maxCols = Math.max(...rawRows.map((r) => r.length));
       const paddedRows = rawRows.map((r) => {
         const copy = [...r];
@@ -541,11 +526,22 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         hasEmptyLine = false;
         blocks.push({ type: "heading2", text: line });
       } else {
-        const isListItem = LIST_ITEM_REGEX.test(line);
+        const isBulletItem = BULLET_ITEM_REGEX.test(line);
+        const isNumberedItem = NUMBERED_ITEM_REGEX.test(line);
         const isReferenceLine = /^[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\./.test(line);
-        if (isListItem) {
+
+        let cleanLine = line;
+        if (cleanLine.startsWith("— ") || cleanLine.startsWith("– ")) {
+          cleanLine = cleanLine.substring(2).trim();
+        }
+
+        if (isBulletItem) {
           flushPara();
-          blocks.push({ type: "bullet", text: line });
+          blocks.push({ type: "bullet" as any, text: cleanLine });
+          hasEmptyLine = false;
+        } else if (isNumberedItem) {
+          flushPara();
+          blocks.push({ type: "listline", text: cleanLine });
           hasEmptyLine = false;
         } else if (isReferenceLine) {
           flushPara();
@@ -877,27 +873,16 @@ export function buildFinalDocument(input: any): FinalDocument {
         }
       } else if (block.type === "table") {
         const fullText = (block.text || "") + " " + (block.tableRows || []).flatMap((r) => r).join(" ");
-        const sectionMatches = fullText.match(/\b\d+\.\d+\s+[A-Za-z]/g) || [];
+        let tabIdx = chapter.tables.findIndex((_, idx) => !consumedTables.has(idx));
+        const table = tabIdx >= 0 ? chapter.tables[tabIdx] : undefined;
+        if (table) {
+          consumedTables.add(tabIdx);
+          const label =
+            config.tableNumbering === "chapter"
+              ? `Table ${chapterNumber}.${tabIdx + 1}`
+              : `Table ${listOfTables.length + tabIdx + 1}`;
 
-        if (sectionMatches.length >= 2) {
-          // Unpack section list outline into normal paragraphs without table grid or caption
-          (block.tableRows || []).forEach((row) => {
-            const lineText = row.filter(Boolean).join(" ").trim();
-            if (lineText) {
-              blocks.push({ type: "para", text: lineText });
-            }
-          });
-        } else {
-          let tabIdx = chapter.tables.findIndex((_, idx) => !consumedTables.has(idx));
-          const table = tabIdx >= 0 ? chapter.tables[tabIdx] : undefined;
-          if (table) {
-            consumedTables.add(tabIdx);
-            const label =
-              config.tableNumbering === "chapter"
-                ? `Table ${chapterNumber}.${tabIdx + 1}`
-                : `Table ${listOfTables.length + tabIdx + 1}`;
-
-            // Deduplicate: if preceding block is a duplicate caption/text line, pop it
+          // Deduplicate: if preceding block is a duplicate caption/text line, pop it
             if (blocks.length > 0) {
               const lastBlock = blocks[blocks.length - 1];
               if (
@@ -919,7 +904,6 @@ export function buildFinalDocument(input: any): FinalDocument {
           } else {
             // Render genuine data table without adding synthetic Table X.Y auto-captions
             blocks.push(block);
-          }
         }
       } else {
         blocks.push(block);

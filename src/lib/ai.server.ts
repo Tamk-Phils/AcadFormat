@@ -30,14 +30,14 @@ Hard rules:
 - ABSOLUTE RULE — NEVER SHORTEN THE WORK. You must not summarise, paraphrase, compress, truncate,
   or drop any sentence of the author's text. Every paragraph of the uploaded document must appear in
   exactly one section, word for word. You only restructure, label, and renumber.
+- ABSOLUTE RULE ON PUNCTUATION — NEVER invent, insert, or change stylistic punctuation. Do NOT insert em-dashes (—) or en-dashes (–) when formatting lists or generating text. Always use the exact characters from the source text.
 - ABSOLUTE RULE ON CHAPTER 1 — Chapter 1 (INTRODUCTION) MUST ONLY contain the academic introduction to the topic (Background of the Study, Problem Statement, Objectives, Research Questions, Rationale, Scope). It MUST NEVER contain personal author details, cover page metadata ("A Project Submitted By...", degree, department), Declarations of Originality, Certifications, or Supervisor/HOD Signature forms. All cover page and personal details belong strictly in "meta" and "preliminary".
 - ABSOLUTE RULE ON CHAPTER COUNT — Academic works have at most 5 main body chapters (1: Introduction, 2: Literature Review, 3: Methodology, 4: Results/Implementation, 5: Discussion/Conclusion). NEVER create 6 or more chapters. REFERENCES, BIBLIOGRAPHY, EXECUTIVE SUMMARY, and APPENDICES must NEVER be returned as chapters.
 - ABSOLUTE RULE ON PRELIMINARY PAGES — Declarations, Certifications, Dedication, Acknowledgements, Abstract, Table of Contents, List of Figures, List of Tables, and List of Abbreviations belong strictly in "preliminary", NEVER inside Chapter 1.
 - For every section you output, also return "startMarker" (the first 8-12 words of that section,
   copied verbatim from the document) and "endMarker" (its last 8-12 words, verbatim). These markers
   are used to re-attach the author's full original text, so they must be exact copies.
-- If a section is very long, still return its full content; if you truly cannot repeat it all,
-  return correct startMarker/endMarker so nothing is lost.
+- If a section is very long, you MUST still return its full content EXACTLY as written. DO NOT paraphrase or drop lines.
 
 Return STRICT JSON only, matching this shape:
 {

@@ -353,7 +353,6 @@ function renderPage(
         elements.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            pageBreakBefore: elements.length > 0,
             keepWithNext: true,
             spacing: { before: 240, after: 80, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true, size: size + 4 })],
@@ -384,10 +383,13 @@ function renderPage(
         const [left, right] = textStr.split("\t");
         const indent = ((block.level ?? 1) - 1) * 360;
         const bold = block.bold === true || (block.level === 1);
+        const isReference = page.sectionTitle?.toLowerCase() === "references";
+        const hangingIndentProps = isReference ? { left: 720, hanging: 720 } : {};
+
         elements.push(
           new Paragraph({
             spacing: { line: 260, before: 20, after: 20 },
-            ...(indent > 0 ? { indent: { left: indent } } : {}),
+            ...(indent > 0 ? { indent: { left: indent, ...hangingIndentProps } } : (isReference ? { indent: hangingIndentProps } : {})),
             ...(right
               ? {
                   tabStops: [

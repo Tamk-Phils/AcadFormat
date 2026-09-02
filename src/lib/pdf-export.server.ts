@@ -397,29 +397,35 @@ export async function buildPdf(
         y -= 1;
         const indentWidth = Math.max(0, (block.level ?? 1) - 1) * 20;
 
+        const isReference = page.sectionTitle?.toLowerCase() === "references";
+        const hangingIndent = isReference ? 36 : 0;
+
         if (!right) {
-          const lines = wrap(left || "", font, baseSize, contentWidth - indentWidth);
-          for (const rawLine of lines) {
+          const lines = wrap(left || "", font, baseSize, contentWidth - indentWidth - hangingIndent);
+          for (let i = 0; i < lines.length; i++) {
+            const rawLine = lines[i]!;
             const line = sanitizeWinAnsi(rawLine, font);
             ensure(leading);
-            sheet!.drawText(line, { x: margin.left + indentWidth, y: y - baseSize, size: baseSize, font });
+            const currentIndent = i === 0 ? indentWidth : indentWidth + hangingIndent;
+            sheet!.drawText(line, { x: margin.left + currentIndent, y: y - baseSize, size: baseSize, font });
             y -= leading;
           }
         } else {
           const cleanRight = sanitizeWinAnsi(right, font);
           const rightWidth = font.widthOfTextAtSize(cleanRight, baseSize);
-          const lines = wrap(left || "", font, baseSize, contentWidth - indentWidth - rightWidth - 20);
+          const lines = wrap(left || "", font, baseSize, contentWidth - indentWidth - hangingIndent - rightWidth - 20);
 
           for (let i = 0; i < lines.length; i++) {
             const line = sanitizeWinAnsi(lines[i] || "", font);
             ensure(leading);
-            sheet!.drawText(line, { x: margin.left + indentWidth, y: y - baseSize, size: baseSize, font });
+            const currentIndent = i === 0 ? indentWidth : indentWidth + hangingIndent;
+            sheet!.drawText(line, { x: margin.left + currentIndent, y: y - baseSize, size: baseSize, font });
 
             if (i === lines.length - 1) {
               sheet!.drawText(cleanRight, { x: margin.left + contentWidth - rightWidth, y: y - baseSize, size: baseSize, font });
 
               const lastLineWidth = font.widthOfTextAtSize(line, baseSize);
-              const dotStartX = margin.left + indentWidth + lastLineWidth + 5;
+              const dotStartX = margin.left + currentIndent + lastLineWidth + 5;
               const dotEndX = margin.left + contentWidth - rightWidth - 5;
               let currentX = dotStartX;
               while (currentX < dotEndX - 5) {
