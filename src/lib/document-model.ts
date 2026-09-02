@@ -53,6 +53,7 @@ export interface PreliminaryItem {
   title: string;
   content: string;
   present: boolean;
+  hasPageBorder?: boolean;
 }
 
 export interface DocumentMeta {
@@ -140,6 +141,8 @@ export interface AnalysisResult {
 /* ---------- Rendered (final) document ---------- */
 
 export type BlockType =
+  | "bullet"
+  | "reference"
   | "title"
   | "heading1"
   | "heading2"

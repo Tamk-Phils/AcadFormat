@@ -6,7 +6,7 @@ import type {
   RenderedPage,
 } from "./document-model";
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
-import { resolveConfig, workLabel } from "./institutions";
+import { resolveConfig, workLabel, COMMON_CONFIG } from "./institutions";
 import { parseTableRows, isPreambleNoiseLine } from "./utils";
 
 /** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
@@ -98,7 +98,9 @@ export function isHeaderFooterNoise(line: string, metaTitle?: string): boolean {
 
   // Match repeated header title strings in lab guides or generic document headers
   if (
-    /^(?:basic vlan configuration\s*[–\-—]?\s*lab guide(?:\s*ccna switching practice)?|ccna switching practice)$/i.test(trimmed)
+    /^(?:basic vlan configuration\s*[–\-—]?\s*lab guide(?:\s*ccna switching practice)?|ccna switching practice)$/i.test(trimmed) ||
+    /^page\s+\d+$/i.test(trimmed) ||
+    /^page\s+\d+\s+of\s+\d+$/i.test(trimmed)
   ) {
     return true;
   }
@@ -158,7 +160,7 @@ export function isCodeLine(line: string): boolean {
     return true;
   }
 
-  if (/^(?:!{3,}|\.\!{1,}|type escape sequence to abort|sending \d+, \d+-byte|success rate is \d+ percent)/i.test(trimmed)) {
+  if (/^(?:!{3,}|\.\!{1,}|type escape sequence to abort|sending \d+, \d+-byte|success rate is \d+ percent|erase of nvram:|system configuration|building configuration|\[confirm\]|\[yes\/no\])/i.test(trimmed)) {
     return true;
   }
 
@@ -182,6 +184,7 @@ function isStrayHeading(line: string): boolean {
   }
 
   if (CHAPTER_PREFIX.test(text)) return true;
+  if (/^(?:step|task|part|phase|activity|lab)\s+\d+\b/i.test(text)) return true;
   // Match numbered headings (e.g. 1.1 Background)
   if (/^\d+(\.\d+)*[.)]?\s+[A-Z][^.]{0,60}$/.test(text) && !/[.!?]$/.test(text)) return true;
 
@@ -301,7 +304,7 @@ function isOriginalSectionTitle(line: string, chapter?: any, allChapters?: any[]
   return false;
 }
 
-const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•→—–";
+const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•→";
 const BULLET_SPLIT_REGEX = new RegExp(`\\s*(?=[${BULLET_CHARS}])`);
 const BULLET_ITEM_REGEX = new RegExp(`^\\s*[-*+${BULLET_CHARS}]\\s+`, "i");
 const ROMAN_PATTERN = "(?:x{0,3})(?:ix|iv|v?i{0,3})";
@@ -411,7 +414,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
     let tableCaptionText = "";
     const rawRows: string[][] = [];
 
-    tableLines.forEach((line) => {
+    tableLines.forEach((line: string) => {
       const trimmedLine = line.trim();
       if (/^(table|tab\.)\s*\d+/i.test(trimmedLine)) {
         tableCaptionText = trimmedLine;
@@ -536,11 +539,20 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       return (next.match(/\|/g) || []).length >= 2 || next.includes("  |  ");
     };
 
+    const isExplicitTableLine =
+      parsePdfTableLine(line) !== null ||
+      /^Device\s*\(Hostname\)\s+Interface/i.test(line) ||
+      /^Ports\s+Assignment\s+Network/i.test(line) ||
+      /\t/.test(line) ||
+      (line.includes("  ") && line.split(/\s{2,}/).filter((s) => s.trim()).length >= 3);
+
     const isTableRow =
       !isCodeLine(line) &&
       (hasPipes ||
         isExplicitPipeTable ||
         isDivider ||
+        isExplicitTableLine ||
+        (inTable && line.split(/\s{2,}/).filter((s) => s.trim()).length >= 2) ||
         (isCaptionLine && checkNextIsTable()));
 
     if (isTableRow) {
@@ -837,13 +849,13 @@ export function buildFinalDocument(input: any): FinalDocument {
       ];
     }
   } else {
-    logoImages = (model?.images ?? []).filter((image) => image.role === "logo") as any;
+    logoImages = (model?.images ?? []).filter((image: any) => image.role === "logo") as any;
   }
 
   const extractedRefs: string[] = [];
 
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
-  (model?.chapters ?? []).forEach((chapter, chapterIndex) => {
+  (model?.chapters ?? []).forEach((chapter: any, chapterIndex: number) => {
     const chapterNumber = chapterIndex + 1;
     let chapterTitle = cleanTitle(chapter.title);
 
@@ -870,11 +882,11 @@ export function buildFinalDocument(input: any): FinalDocument {
     });
 
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
-    const validSections = (chapter.sections || []).filter((s) => {
+    const validSections = (chapter.sections || []).filter((s: any) => {
       const isRefSec = /^(references?|bibliograph|works cited|list of references)/i.test(s.title || "");
       if (isRefSec && s.content) {
         // Extract references from dedicated reference sections
-        s.content.split("\n").forEach((line) => {
+        s.content.split("\n").forEach((line: string) => {
           const trimmed = line.replace(/^[—–]\s+/, "").replace(/\bREQUIRES_USER_REVIEW\b/g, "").trim();
           if (trimmed && trimmed.length > 10 && !/^(references?|bibliograph)/i.test(trimmed)) {
             extractedRefs.push(trimmed);
@@ -885,7 +897,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       return true;
     });
 
-    validSections.forEach((section, sectionIndex) => {
+    validSections.forEach((section: any, sectionIndex: number) => {
       const number = `${chapterNumber}.${sectionIndex + 1}`;
       let sectionTitle = cleanTitle(section.title).replace(/^(?:\d+\.)+\d*\s*/, "").trim();
       if (!sectionTitle) sectionTitle = `Section ${sectionIndex + 1}`;
@@ -917,14 +929,14 @@ export function buildFinalDocument(input: any): FinalDocument {
       }
 
       if (block.type === "image") {
-        let figIdx = chapter.figures.findIndex((fig, idx) => {
+        let figIdx = chapter.figures.findIndex((fig: any, idx: number) => {
           if (consumedFigures.has(idx)) return false;
           const m = fig.originalLabel?.match(/\[IMAGE:(\d+)\]/i);
           return m ? `img-${m[1]}` === block.imageId : false;
         });
 
         if (figIdx < 0) {
-          figIdx = chapter.figures.findIndex((_, idx) => !consumedFigures.has(idx));
+          figIdx = chapter.figures.findIndex((_: any, idx: number) => !consumedFigures.has(idx));
         }
 
         const figure = figIdx >= 0 ? chapter.figures[figIdx] : undefined;
@@ -960,7 +972,7 @@ export function buildFinalDocument(input: any): FinalDocument {
         }
       } else if (block.type === "table") {
         const fullText = (block.text || "") + " " + (block.tableRows || []).flatMap((r) => r).join(" ");
-        let tabIdx = chapter.tables.findIndex((_, idx) => !consumedTables.has(idx));
+        let tabIdx = chapter.tables.findIndex((_: any, idx: number) => !consumedTables.has(idx));
         const table = tabIdx >= 0 ? chapter.tables[tabIdx] : undefined;
         if (table) {
           consumedTables.add(tabIdx);
@@ -1096,7 +1108,7 @@ export function buildFinalDocument(input: any): FinalDocument {
   const appendicesList = model?.appendices ?? [];
   if (appendicesList.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "APPENDICES" }];
-    appendicesList.forEach((appendix) => {
+    appendicesList.forEach((appendix: any) => {
       blocks.push({ type: "heading2", text: `${appendix.label}: ${cleanTitle(appendix.title)}` });
       const appendixBlocks = parseSectionContent(appendix.content, model?.images ?? []);
       blocks.push(...appendixBlocks);
@@ -1266,8 +1278,9 @@ export function buildFinalDocument(input: any): FinalDocument {
   // Construct complete Table of Contents entries.
   // First, we populate preliminary entries with placeholders, followed by the main body entries.
   const completeTOC: { label: string; text: string; page: string; level: number }[] = [];
+  const prelimOrder = config.preliminaryOrder || COMMON_CONFIG.preliminaryOrder;
 
-  config.preliminaryOrder.forEach((type) => {
+  prelimOrder.forEach((type: SectionType) => {
     if (type === "COVER_PAGE" || type === "TITLE_PAGE" || type === "TABLE_OF_CONTENTS") return;
     const title = PRELIM_TITLES[type] || type.replace(/_/g, " ");
     completeTOC.push({
@@ -1281,14 +1294,14 @@ export function buildFinalDocument(input: any): FinalDocument {
   // Append all main body entries (chapters, sections, references, appendices)
   completeTOC.push(...toc);
 
-  for (const type of config.preliminaryOrder) {
+  for (const type of prelimOrder as SectionType[]) {
     const title = PRELIM_TITLES[type] || type.replace(/_/g, " ");
     if (type === "COVER_PAGE") {
       addPrelim(type, "Cover Page", coverBlocks, "cover");
       continue;
     }
     if (type === "TITLE_PAGE") {
-      if (config.preliminaryOrder.includes("COVER_PAGE")) {
+      if (prelimOrder.includes("COVER_PAGE")) {
         continue;
       }
       addPrelim(type, "Title Page", coverBlocks, "preliminary");
@@ -1498,7 +1511,7 @@ export function buildFinalDocument(input: any): FinalDocument {
 
   // Update completeTOC entries with the actual roman page numbers
   let pIdx = 0;
-  config.preliminaryOrder.forEach((secType) => {
+  (config.preliminaryOrder || COMMON_CONFIG.preliminaryOrder).forEach((secType: SectionType) => {
     if (secType === "COVER_PAGE" || secType === "TITLE_PAGE" || secType === "TABLE_OF_CONTENTS") return;
     const page = prelimSectionPages.get(secType) || "";
     if (completeTOC[pIdx]) {

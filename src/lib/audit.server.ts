@@ -157,6 +157,8 @@ function gateTextFlow(
   const slicedCount = paraBlocks.filter((b) => {
     const text = (b.text || "").trim();
     // Short para that doesn't end with punctuation — likely a sliced sentence
+    const isTitleOrStep = /^(?:step|task|part|chapter|section)\s+\d+/i.test(text) || /^(?:learning objectives|reference information|addressing table|ports assignment network|basic vlan configuration)/i.test(text);
+    if (isTitleOrStep) return false;
     return text.length > 0 && text.length < 40 && !/[.!?:;,)\]"'»]$/.test(text);
   }).length;
 
