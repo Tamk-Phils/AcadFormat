@@ -361,39 +361,10 @@ function cleanDept(dept: string): string {
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any, allChapters?: any[]): Block[] {
   // Strip AI-generated noise placeholders that might mess up the AST
   const cleanContent = typeof content === "string" ? content : String(content ?? "");
-  let noPlaceholder = cleanContent
+  const noPlaceholder = cleanContent
     .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
     .replace(/\bundefined\b/g, "")
     .replace(/\bnull\b/g, "");
-
-  // Pre-process raw PDF spaced text into valid Markdown tables for the AST to consume
-  const lines = noPlaceholder.split("\n");
-  const processedLines: string[] = [];
-  let inTable = false;
-  
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const tableCells = parsePdfTableLine(trimmed);
-    
-    if (tableCells && tableCells.length > 1) {
-      if (!inTable) {
-        inTable = true;
-        // Inject Markdown Table Header separators when starting a table
-        processedLines.push("| " + tableCells.join(" | ") + " |");
-        processedLines.push("|" + tableCells.map(() => "---").join("|") + "|");
-      } else {
-        processedLines.push("| " + tableCells.join(" | ") + " |");
-      }
-    } else {
-      if (inTable && trimmed === "") {
-        // Empty line ends the table
-        inTable = false;
-      }
-      processedLines.push(line);
-    }
-  }
-  
-  noPlaceholder = processedLines.join("\n");
 
   // Initialize the Semantic AST Engine
   const engine = new SemanticASTEngine(noPlaceholder);
@@ -936,6 +907,7 @@ export function buildFinalDocument(input: any): FinalDocument {
     const optionStr = (meta.specialty || deptName).toUpperCase();
 
     coverBlocks.push(
+      ...(logoImages.length > 0 ? [{ type: "logos" as const, text: "", imageIds: logoImages.map(img => img.id) }] : []),
       { type: "spacer" as const, text: "" },
       { type: "center" as const, text: `A ${workLabelText} submitted to the Department of ${deptName} in the College of Technology of the University of Bamenda in partial fulfillment of the requirements for the award of a ${degreeType} Degree in ${deptName}` },
       { type: "center" as const, text: `(OPTION: ${optionStr})` },
