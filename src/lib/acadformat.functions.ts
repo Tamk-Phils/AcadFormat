@@ -222,7 +222,7 @@ export const formatDocument = createServerFn({ method: "POST" })
             document_id: row.id,
             severity: verificationAuditResult.adminAlert.severity,
             triggered: true,
-            checks: toJson(verificationAuditResult.verificationAudit.checks),
+            checks: toJson(verificationAuditResult.verificationAudit.gates),
             persistent_errors: toJson(verificationAuditResult.adminAlert.persistentErrors),
             reconstruction_status: verificationAuditResult.reconstructionStatus,
             download_ready: verificationAuditResult.downloadReady,
@@ -232,7 +232,7 @@ export const formatDocument = createServerFn({ method: "POST" })
             else console.log(`[Audit] Admin alert stored — severity: ${verificationAuditResult!.adminAlert.severity}`);
           });
       } else {
-        console.log("[Audit] All 7 verification checks PASSED. No admin alert required.");
+        console.log("[Audit] All 5 quality gates PASSED. No admin alert required.");
       }
     } catch (auditErr: any) {
       console.warn("[Audit] Verification audit failed gracefully:", auditErr?.message);

@@ -1,30 +1,31 @@
 /**
  * AcadFormat Verification Audit Engine
  *
- * Runs 7 mandatory compliance checks against the reconstructed document AST
- * and generates an admin telemetry alert payload when any check fails.
+ * Runs 5 mandatory quality gates against the reconstructed document AST
+ * and generates an admin telemetry alert payload when any gate fails.
+ *
+ * Gate schema matches the AcadFormat Admin Telemetry Directive v2:
+ *   GATE_REFERENCES | GATE_TABLES | GATE_TEXT_FLOW | GATE_LISTS | GATE_CONTENT
  */
 
 import type { FinalDocument, DocumentModel } from "./document-model";
 
-export type CheckResult = "PASSED" | "FAILED";
+export type GateResult = "PASSED" | "FAILED";
 export type AlertSeverity = "CRITICAL" | "WARNING" | "NONE";
 export type ReconstructionStatus = "SUCCESS" | "AUTO_REMEDIATED" | "FAILED";
 
-export interface AuditChecks {
-  contentIntegrity: CheckResult;
-  tableStructure: CheckResult;
-  listFormatting: CheckResult;
-  singleReferencesSection: CheckResult;
-  paginationAndFlow: CheckResult;
-  tocAccuracy: CheckResult;
-  abbreviationCleanliness: CheckResult;
+export interface AuditGates {
+  referencesUnified: GateResult;    // GATE_REFERENCES
+  tablesIntact: GateResult;          // GATE_TABLES
+  textFlowNoSlicing: GateResult;     // GATE_TEXT_FLOW
+  listsConverted: GateResult;        // GATE_LISTS
+  contentIntegrity: GateResult;      // GATE_CONTENT
 }
 
 export interface PersistentError {
-  category: string;
+  gate: string;
   description: string;
-  recommendedAction: string;
+  actionRequired: string;
 }
 
 export interface AdminAlert {
@@ -38,7 +39,7 @@ export interface AdminAlert {
 
 export interface VerificationAudit {
   verificationPassed: boolean;
-  checks: AuditChecks;
+  gates: AuditGates;
 }
 
 export interface AuditResult {
@@ -63,44 +64,48 @@ function hasNoise(text: string): boolean {
   return NOISE_PATTERNS.some((p) => p.test(text));
 }
 
-/**
- * CHECK 1 — Content Integrity
- * word_count(final) >= 99% of word_count(originalText)
- */
-function checkContentIntegrity(
-  final: FinalDocument,
-  originalText: string,
-): { result: CheckResult; error?: PersistentError } {
-  const originalWords = originalText.trim().split(/\s+/).filter(Boolean).length;
-  const finalWords = final.pages
+function allFinalWords(final: FinalDocument): string[] {
+  const NON_TEXT = new Set(["image", "logos", "spacer", "table", "bilingual", "ubaHeader"]);
+  return final.pages
     .flatMap((p) => p.blocks)
-    .filter((b) => b.type === "para" || b.type === "heading1" || b.type === "heading2" || b.type === "listline" || b.type === "reference")
-    .map((b) => b.text || "")
+    .filter((b) => !NON_TEXT.has(b.type) && b.text)
+    .map((b) => b.text!)
     .join(" ")
     .trim()
     .split(/\s+/)
-    .filter(Boolean).length;
+    .filter(Boolean);
+}
 
-  const ratio = originalWords > 0 ? finalWords / originalWords : 1;
-  if (ratio >= 0.99) return { result: "PASSED" };
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE_REFERENCES — Exactly ONE References section, no duplicate headings
+// ─────────────────────────────────────────────────────────────────────────────
+function gateReferences(
+  final: FinalDocument,
+): { result: GateResult; error?: PersistentError } {
+  const refHeadings = final.pages
+    .flatMap((p) => p.blocks)
+    .filter((b) => b.type === "heading1" && /^references?$/i.test((b.text || "").trim()));
+
+  if (refHeadings.length <= 1) return { result: "PASSED" };
+
   return {
     result: "FAILED",
     error: {
-      category: "CONTENT_INTEGRITY",
-      description: `Word count dropped to ${Math.round(ratio * 100)}% of original (${originalWords} → ${finalWords} words). Minimum required: 99%.`,
-      recommendedAction: "Re-analyse the document. Check AI prompt verbatim preservation rules and verbatim.ts restoration.",
+      gate: "GATE_REFERENCES",
+      description: `Found ${refHeadings.length} References headings in the final document. Exactly 1 is required.`,
+      actionRequired:
+        "Ensure the AI prompt rule prevents bibliography text inside chapter content. Verify document-build.ts only emits one References pushBody() call.",
     },
   };
 }
 
-/**
- * CHECK 2 — Table Structure
- * All table blocks must be unified table elements (not split into loose paragraphs).
- */
-function checkTableStructure(
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE_TABLES — All model tables present as unified grid elements (not split rows)
+// ─────────────────────────────────────────────────────────────────────────────
+function gateTables(
   final: FinalDocument,
   model: DocumentModel,
-): { result: CheckResult; error?: PersistentError } {
+): { result: GateResult; error?: PersistentError } {
   const finalTableCount = final.pages
     .flatMap((p) => p.blocks)
     .filter((b) => b.type === "table").length;
@@ -113,28 +118,78 @@ function checkTableStructure(
   if (modelTableCount === 0) return { result: "PASSED" };
   if (finalTableCount >= modelTableCount) return { result: "PASSED" };
 
+  // Also check for timeline row leakage — month-like rows appearing as paragraphs
+  const allParaText = final.pages
+    .flatMap((p) => p.blocks)
+    .filter((b) => b.type === "para")
+    .map((b) => b.text || "")
+    .join(" ");
+  const timelineLeakage = /\bMonth\s+\d+\b/i.test(allParaText);
+
+  const extra = timelineLeakage
+    ? " Timeline rows (e.g., \"Month 1\", \"Month 2\") appear to have leaked into body paragraphs."
+    : "";
+
   return {
     result: "FAILED",
     error: {
-      category: "TABLE_STRUCTURE",
-      description: `Expected ${modelTableCount} table(s) but final document contains ${finalTableCount}. Tables may have been split into loose paragraphs.`,
-      recommendedAction: "Review parseSectionContent table detection. Ensure flushTable() is called correctly and rows are not converted to paragraphs.",
+      gate: "GATE_TABLES",
+      description:
+        `Expected ${modelTableCount} table(s) as unified grid elements, found ${finalTableCount}.${extra}`,
+      actionRequired:
+        "Review flushTable() in document-build.ts. Ensure table rows are never converted to external paragraphs. Check that 'Month N' timeline cells remain inside the table block.",
     },
   };
 }
 
-/**
- * CHECK 3 — List Formatting
- * Checks that the final document contains listline/bullet blocks (i.e., lists were extracted).
- * Only flags if the model's section content has obvious list patterns that went undetected.
- */
-function checkListFormatting(
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE_TEXT_FLOW — No artificial sentence fragmentation or mid-sentence line breaks
+// ─────────────────────────────────────────────────────────────────────────────
+function gateTextFlow(
+  final: FinalDocument,
+): { result: GateResult; error?: PersistentError } {
+  // Detect paragraphs that end with a word fragment (no terminal punctuation)
+  // and are suspiciously short (< 40 chars), indicating artificial line slicing
+  const paraBlocks = final.pages
+    .flatMap((p) => p.blocks)
+    .filter((b) => b.type === "para" && b.text);
+
+  const slicedCount = paraBlocks.filter((b) => {
+    const text = (b.text || "").trim();
+    // Short para that doesn't end with punctuation — likely a sliced sentence
+    return text.length > 0 && text.length < 40 && !/[.!?:;,)\]"'»]$/.test(text);
+  }).length;
+
+  // Also detect AI-injected noise characters
+  const noiseCount = final.pages
+    .flatMap((p) => p.blocks)
+    .filter((b) => hasNoise(b.text || "")).length;
+
+  if (slicedCount === 0 && noiseCount === 0) return { result: "PASSED" };
+
+  return {
+    result: "FAILED",
+    error: {
+      gate: "GATE_TEXT_FLOW",
+      description:
+        `Detected ${slicedCount} potentially sliced paragraph fragment(s) and ${noiseCount} block(s) with AI artifact noise (→, =>, REQUIRES_USER_REVIEW, undefined).`,
+      actionRequired:
+        "Check parseSectionContent() noise stripping in document-build.ts. Ensure no artificial \\n breaks are injected inside sentence text. Verify normalize() in ai.server.ts strips all placeholder strings.",
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE_LISTS — RQs, Objectives, and numbered/roman items converted to list nodes
+// ─────────────────────────────────────────────────────────────────────────────
+function gateLists(
   final: FinalDocument,
   model: DocumentModel,
-): { result: CheckResult; error?: PersistentError } {
-  const listPattern = /(?:RQ\s*\d+|^\s*\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\)|^\s*\d+\.\s)/im;
+): { result: GateResult; error?: PersistentError } {
+  const listPattern = /(?:R?Q\s*\d+|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\)|\b(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\.\s|\b\d+\.\s)/im;
   const hasListsInSource = (model.chapters || []).some((ch) =>
-    ch.sections.some((s) => listPattern.test(s.content || ""))
+    ch.sections.some((s) => listPattern.test(s.content || "")) ||
+    listPattern.test(ch.intro || "")
   );
 
   if (!hasListsInSource) return { result: "PASSED" };
@@ -148,122 +203,42 @@ function checkListFormatting(
   return {
     result: "FAILED",
     error: {
-      category: "LIST_FORMATTING",
-      description: "Source content contains RQs, objectives, or Roman numeral lists but no list blocks were generated in the final document.",
-      recommendedAction: "Check NUMBERED_ITEM_REGEX and BULLET_ITEM_REGEX in document-build.ts. Verify the inline run-in splitter is splitting RQ1/RQ2/(i)/(ii) patterns.",
+      gate: "GATE_LISTS",
+      description:
+        "Source content contains RQs, numbered objectives, or Roman numeral items but no structured list blocks were found in the final document.",
+      actionRequired:
+        "Check NUMBERED_ITEM_REGEX and the inline run-in splitter in document-build.ts. Verify RQ1/RQ2/(i)/(ii)/I./II. patterns are split before block detection.",
     },
   };
 }
 
-/**
- * CHECK 4 — Single References Section
- * The final document must have exactly ONE heading1 block with text "REFERENCES".
- */
-function checkSingleReferencesSection(
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE_CONTENT — Reconstructed word count >= 99% of original
+// ─────────────────────────────────────────────────────────────────────────────
+function gateContent(
   final: FinalDocument,
-): { result: CheckResult; error?: PersistentError } {
-  const refHeadings = final.pages
-    .flatMap((p) => p.blocks)
-    .filter((b) => b.type === "heading1" && /^references?$/i.test((b.text || "").trim()));
+  originalText: string,
+): { result: GateResult; error?: PersistentError } {
+  const originalWords = originalText.trim().split(/\s+/).filter(Boolean).length;
+  const finalWords = allFinalWords(final).length;
+  const ratio = originalWords > 0 ? finalWords / originalWords : 1;
 
-  if (refHeadings.length === 1) return { result: "PASSED" };
-  if (refHeadings.length === 0) return { result: "PASSED" }; // No references in this doc
+  if (ratio >= 0.99) return { result: "PASSED" };
 
   return {
     result: "FAILED",
     error: {
-      category: "REFERENCES_DUPLICATION",
-      description: `Found ${refHeadings.length} References headings in the final document. Should be exactly 1.`,
-      recommendedAction: "Ensure references are stripped from chapter content by the AI prompt rule. Check that document-build.ts only emits one References section.",
+      gate: "GATE_CONTENT",
+      description: `Word count dropped to ${Math.round(ratio * 100)}% of original (${originalWords} → ${finalWords} words). Minimum required: 99%.`,
+      actionRequired:
+        "Re-analyse the document. Ensure verbatim.ts restoration is covering all sections. Confirm the AI prompt enforces the zero-truncation rule.",
     },
   };
 }
 
-/**
- * CHECK 5 — Pagination & Flow
- * No chapter heading1 should appear as the only block on a page (orphaned heading).
- */
-function checkPaginationAndFlow(
-  final: FinalDocument,
-): { result: CheckResult; error?: PersistentError } {
-  const orphanedPages = final.pages.filter(
-    (p) =>
-      p.blocks.length === 1 &&
-      (p.blocks[0]!.type === "heading1" || p.blocks[0]!.type === "heading2")
-  );
-
-  if (orphanedPages.length === 0) return { result: "PASSED" };
-
-  return {
-    result: "FAILED",
-    error: {
-      category: "PAGINATION_FLOW",
-      description: `${orphanedPages.length} page(s) contain only an orphaned heading with no body text. This creates blank voids.`,
-      recommendedAction: "Check chunkBlocks() in document-build.ts. Headings should always be grouped with subsequent content via keepWithNext logic.",
-    },
-  };
-}
-
-/**
- * CHECK 6 — TOC Accuracy
- * The TOC must reference at least as many sections as there are chapters.
- */
-function checkTocAccuracy(
-  final: FinalDocument,
-  model: DocumentModel,
-): { result: CheckResult; error?: PersistentError } {
-  // Find the TOC page
-  const tocPage = final.pages.find((p) => p.sectionTitle === "Table of Contents");
-  if (!tocPage) return { result: "PASSED" }; // TOC not generated — nothing to validate
-
-  const tocEntries = tocPage.blocks.filter((b) => b.type === "listline").length;
-  const expectedMin = model.chapters?.length ?? 0;
-
-  if (tocEntries >= expectedMin) return { result: "PASSED" };
-
-  return {
-    result: "FAILED",
-    error: {
-      category: "TOC_ACCURACY",
-      description: `TOC has ${tocEntries} entries but document has ${expectedMin} chapter(s). TOC may be missing sections.`,
-      recommendedAction: "Review TOC generation in document-build.ts. Ensure all chapter and section headings are registered in the toc[] array.",
-    },
-  };
-}
-
-/**
- * CHECK 7 — Abbreviation Cleanliness
- * No block text should contain noise placeholders.
- */
-function checkAbbreviationCleanliness(
-  final: FinalDocument,
-  model: DocumentModel,
-): { result: CheckResult; error?: PersistentError } {
-  // Check abbreviations list
-  const dirtyAbbrev = (model.abbreviations || []).some(
-    (a) => hasNoise(a.abbreviation) || hasNoise(a.meaning)
-  );
-
-  // Check if any rendered block contains noise
-  const dirtyBlock = final.pages
-    .flatMap((p) => p.blocks)
-    .some((b) => hasNoise(b.text || ""));
-
-  if (!dirtyAbbrev && !dirtyBlock) return { result: "PASSED" };
-
-  return {
-    result: "FAILED",
-    error: {
-      category: "ABBREVIATION_NOISE",
-      description: "Placeholder strings (REQUIRES_USER_REVIEW, undefined, null) or AI artifacts (→, =>) detected in document output.",
-      recommendedAction: "Check normalize() in ai.server.ts to strip REQUIRES_USER_REVIEW. Check parseSectionContent noise stripping in document-build.ts.",
-    },
-  };
-}
-
-/**
- * Run all 7 mandatory verification checks and produce an AuditResult.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Run all 5 quality gates and produce the full AuditResult payload
+// ─────────────────────────────────────────────────────────────────────────────
 export function runVerificationAudit(input: {
   documentId: string;
   userId: string;
@@ -273,39 +248,35 @@ export function runVerificationAudit(input: {
 }): AuditResult {
   const { documentId, userId, final, model, originalText } = input;
 
-  const results = {
-    contentIntegrity: checkContentIntegrity(final, originalText),
-    tableStructure: checkTableStructure(final, model),
-    listFormatting: checkListFormatting(final, model),
-    singleReferencesSection: checkSingleReferencesSection(final),
-    paginationAndFlow: checkPaginationAndFlow(final),
-    tocAccuracy: checkTocAccuracy(final, model),
-    abbreviationCleanliness: checkAbbreviationCleanliness(final, model),
+  const gateResults = {
+    referencesUnified: gateReferences(final),
+    tablesIntact:      gateTables(final, model),
+    textFlowNoSlicing: gateTextFlow(final),
+    listsConverted:    gateLists(final, model),
+    contentIntegrity:  gateContent(final, originalText),
   };
 
-  const checks: AuditChecks = {
-    contentIntegrity: results.contentIntegrity.result,
-    tableStructure: results.tableStructure.result,
-    listFormatting: results.listFormatting.result,
-    singleReferencesSection: results.singleReferencesSection.result,
-    paginationAndFlow: results.paginationAndFlow.result,
-    tocAccuracy: results.tocAccuracy.result,
-    abbreviationCleanliness: results.abbreviationCleanliness.result,
+  const gates: AuditGates = {
+    referencesUnified:  gateResults.referencesUnified.result,
+    tablesIntact:       gateResults.tablesIntact.result,
+    textFlowNoSlicing:  gateResults.textFlowNoSlicing.result,
+    listsConverted:     gateResults.listsConverted.result,
+    contentIntegrity:   gateResults.contentIntegrity.result,
   };
 
-  const persistentErrors: PersistentError[] = Object.values(results)
+  const persistentErrors: PersistentError[] = Object.values(gateResults)
     .filter((r) => r.result === "FAILED" && r.error)
     .map((r) => r.error!);
 
   const verificationPassed = persistentErrors.length === 0;
   const alertTriggered = !verificationPassed;
 
-  // Determine severity: CRITICAL if content integrity or table structure fails, WARNING otherwise
+  // CRITICAL = content loss or table corruption; WARNING = flow/list/reference issues
   let severity: AlertSeverity = "NONE";
   if (alertTriggered) {
-    const criticalFailed =
-      checks.contentIntegrity === "FAILED" || checks.tableStructure === "FAILED";
-    severity = criticalFailed ? "CRITICAL" : "WARNING";
+    const isCritical =
+      gates.contentIntegrity === "FAILED" || gates.tablesIntact === "FAILED";
+    severity = isCritical ? "CRITICAL" : "WARNING";
   }
 
   const reconstructionStatus: ReconstructionStatus = verificationPassed
@@ -320,7 +291,7 @@ export function runVerificationAudit(input: {
     reconstructionStatus,
     verificationAudit: {
       verificationPassed,
-      checks,
+      gates,
     },
     adminAlert: {
       alertTriggered,
@@ -330,6 +301,6 @@ export function runVerificationAudit(input: {
       timestamp: new Date().toISOString(),
       persistentErrors,
     },
-    downloadReady: checks.contentIntegrity === "PASSED",
+    downloadReady: gates.contentIntegrity === "PASSED",
   };
 }
