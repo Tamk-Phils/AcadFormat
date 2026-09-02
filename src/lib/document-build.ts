@@ -304,7 +304,20 @@ function isOriginalSectionTitle(line: string, chapter?: any, allChapters?: any[]
 const BULLET_CHARS = "➢➤✓✔▪▫♦○●■▲▼◦•→—–";
 const BULLET_SPLIT_REGEX = new RegExp(`\\s*(?=[${BULLET_CHARS}])`);
 const BULLET_ITEM_REGEX = new RegExp(`^\\s*[-*+${BULLET_CHARS}]\\s+`, "i");
-const NUMBERED_ITEM_REGEX = /^\s*(?:[a-zA-Z0-9]+[.)]\s+|Q\d+[.)]?\s+|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x|[a-zA-Z0-9]+)\)\s*)/i;
+const ROMAN_PATTERN = "(?:x{0,3})(?:ix|iv|v?i{0,3})";
+const NUMBERED_ITEM_REGEX = new RegExp(
+  `^\\s*(?:` +
+    // RQ1, RQ 1, RQ1:, RQ1., Q1, Q1:, Q1)
+    `(?:R?Q\\s*\\d+)(?:[.):!?\\]]\\s*|\\s+)|` +
+    // Stand-alone Roman numerals: I., II., III., IV., VIII. ... (upper or lower)
+    `(?:${ROMAN_PATTERN.toUpperCase()}|${ROMAN_PATTERN})\\.\\s+|` +
+    // (i), (ii), (viii) etc.
+    `\\((?:${ROMAN_PATTERN.toUpperCase()}|${ROMAN_PATTERN}|[a-zA-Z0-9]{1,4})\\)\\s*|` +
+    // Plain numbered: 1., 1), a., a) — up to 6-char labels
+    `(?:[a-zA-Z0-9]{1,6}(?:\\.\\d+)*)[\.\\)]\\s+` +
+  `)`,
+  "i"
+);
 
 function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: boolean): boolean {
   const prev = prevLine.trim();
@@ -330,15 +343,31 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
   const rawLines = textStr.split("\n");
   const lines: string[] = [];
   rawLines.forEach((rawLine) => {
+    // Strip AI-generated noise placeholders
+    const noPlaceholder = rawLine
+      .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+      .replace(/\bundefined\b/g, "")
+      .replace(/\bnull\b/g, "")
+      .replace(/```[a-z]*/gi, "")
+      .replace(/```/g, "");
+
     // Pre-split inline [IMAGE:...] markers so they become standalone line items
-    const imageChunks = rawLine.split(/(?=\[IMAGE(?::\d+)?\])|(?<=\[IMAGE(?::\d+)?\])/i);
+    const imageChunks = noPlaceholder.split(/(?=\[IMAGE(?::\d+)?\])|(?<=\[IMAGE(?::\d+)?\])/i);
     imageChunks.forEach((chunk) => {
-      // Split inline list/layer markers like (i)... (ii)... (iii)... or Layer Name:
-      const listSplit = chunk.split(/(?=\b(?:Data Ingestion Layer|Feature Extraction Layer|Detection Engine Layer|Decision and Alerting Layer|Presentation Layer|Programming and modelling:|NLP processing:|Service architecture:|Dashboard:|Version control and documentation:|\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\))\s*)/i);
-      listSplit.forEach((sub) => {
-        const parts = sub.split(BULLET_SPLIT_REGEX);
-        parts.forEach((part) => {
-          if (part.trim()) lines.push(part.trim());
+      // ── Inline run-in enumeration splitter ──────────────────────────────────
+      // Handles patterns like: "RQ1 ... RQ2 ...", "(i)... (ii)...", "1. ... 2. ..."
+      // Split BEFORE the list marker so each item starts its own line
+      const runInSplit = chunk.split(
+        /(?=\b(?:R?Q\s*\d+)[.:)!?\s]|(?:(?:x{0,3})(?:ix|iv|v?i{0,3})|(?:X{0,3})(?:IX|IV|V?I{0,3}))\.\s|\((?:(?:x{0,3})(?:ix|iv|v?i{0,3})|(?:X{0,3})(?:IX|IV|V?I{0,3})|[a-zA-Z]{1,4}|\d{1,2})\)\s*)/i
+      );
+      runInSplit.forEach((sub) => {
+        // Split inline list/layer markers like (i)... (ii)... (iii)... or Layer Name:
+        const listSplit = sub.split(/(?=\b(?:Data Ingestion Layer|Feature Extraction Layer|Detection Engine Layer|Decision and Alerting Layer|Presentation Layer|Programming and modelling:|NLP processing:|Service architecture:|Dashboard:|Version control and documentation:)\s*)/i);
+        listSplit.forEach((subItem) => {
+          const parts = subItem.split(BULLET_SPLIT_REGEX);
+          parts.forEach((part) => {
+            if (part.trim()) lines.push(part.trim());
+          });
         });
       });
     });
@@ -406,6 +435,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       }
     });
 
+    // Table captions MUST go ABOVE the table — store pending caption, emit after table
     if (tableCaptionText) {
       blocks.push({ type: "caption", text: tableCaptionText });
     }
@@ -530,10 +560,16 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         const isNumberedItem = NUMBERED_ITEM_REGEX.test(line);
         const isReferenceLine = /^[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\./.test(line);
 
-        let cleanLine = line;
-        if (cleanLine.startsWith("— ") || cleanLine.startsWith("– ")) {
-          cleanLine = cleanLine.substring(2).trim();
-        }
+        let cleanLine = line
+          // Strip leading AI-generated dashes
+          .replace(/^[—–]\s+/, "")
+          // Strip AI noise
+          .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+          .replace(/→\s*/g, "")
+          .replace(/=>\s*/g, "")
+          .replace(/```[a-z]*/gi, "")
+          .replace(/```/g, "")
+          .trim();
 
         if (isBulletItem) {
           flushPara();
@@ -993,10 +1029,14 @@ export function buildFinalDocument(input: any): FinalDocument {
   const refs = model?.references ?? [];
   if (refs.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "REFERENCES" }];
-    const safeRefs = refs.map(r => typeof r === "string" ? r : (r as any)?.text || (r as any)?.title || String(r || ""));
-    [...safeRefs]
-      .sort((a, b) => a.localeCompare(b))
-      .forEach((reference) => blocks.push({ type: "listline", text: reference }));
+    const safeRefs = refs
+      .map(r => typeof r === "string" ? r : (r as any)?.text || (r as any)?.title || String(r || ""))
+      .map(r => r.trim())
+      .filter(r => r.length > 0 && r !== "undefined" && r !== "null")
+      // Deduplicate: normalise whitespace then unique
+      .filter((r, idx, arr) => arr.findIndex(x => x.replace(/\s+/g, " ") === r.replace(/\s+/g, " ")) === idx)
+      .sort((a, b) => a.localeCompare(b));
+    safeRefs.forEach((reference) => blocks.push({ type: "reference", text: reference }));
     const page = pushBody("References", blocks, "back");
     toc.push({ label: "", text: "REFERENCES", page: String(page), level: 1 });
   }
@@ -1014,9 +1054,9 @@ export function buildFinalDocument(input: any): FinalDocument {
     toc.push({ label: "", text: "APPENDICES", page: String(page), level: 1 });
   }
 
-  const listOfAbbreviations = (model?.abbreviations ?? []).map((a) => ({
-    label: a.abbreviation,
-    text: a.meaning,
+  const listOfAbbreviations = (model?.abbreviations ?? []).map((a: any) => ({
+    label: a.abbreviation || a.term || a.word || "",
+    text: a.meaning || a.definition || a.expansion || "",
   }));
 
   // ---- Preliminary pages (roman numerals, generated lists) ----

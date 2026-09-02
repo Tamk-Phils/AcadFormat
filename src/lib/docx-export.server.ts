@@ -354,7 +354,7 @@ function renderPage(
           new Paragraph({
             alignment: AlignmentType.CENTER,
             keepWithNext: true,
-            spacing: { before: 240, after: 80, line: Math.round(config.lineSpacing * 240) },
+            spacing: { before: 200, after: 60, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true, size: size + 4 })],
           }),
         );
@@ -363,7 +363,7 @@ function renderPage(
         elements.push(
           new Paragraph({
             keepWithNext: true,
-            spacing: { before: 180, after: 60, line: Math.round(config.lineSpacing * 240) },
+            spacing: { before: 160, after: 40, line: Math.round(config.lineSpacing * 240) },
             children: [new TextRun({ ...common, text: block.text, bold: true })],
           }),
         );
@@ -380,16 +380,20 @@ function renderPage(
         break;
       case "listline": {
         const textStr = typeof block.text === "string" ? block.text : String(block.text ?? "");
-        const [left, right] = textStr.split("\t");
+        // Strip AI noise from list items
+        const cleanText = textStr
+          .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+          .replace(/→\s*/g, "")
+          .replace(/=>\s*/g, "")
+          .trim();
+        const [left, right] = cleanText.split("\t");
         const indent = ((block.level ?? 1) - 1) * 360;
         const bold = block.bold === true || (block.level === 1);
-        const isReference = page.sectionTitle?.toLowerCase() === "references";
-        const hangingIndentProps = isReference ? { left: 720, hanging: 720 } : {};
 
         elements.push(
           new Paragraph({
-            spacing: { line: 260, before: 20, after: 20 },
-            ...(indent > 0 ? { indent: { left: indent, ...hangingIndentProps } } : (isReference ? { indent: hangingIndentProps } : {})),
+            spacing: { line: Math.round(config.lineSpacing * 240), before: 20, after: 20 },
+            ...(indent > 0 ? { indent: { left: indent } } : {}),
             ...(right
               ? {
                   tabStops: [
@@ -481,12 +485,18 @@ function renderPage(
         break;
       }
       case "reference": {
+        // Clean AI noise from reference text
+        const refText = (block.text || "")
+          .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+          .replace(/→\s*/g, "")
+          .trim();
         elements.push(
           new Paragraph({
             alignment: AlignmentType.LEFT,
             indent: { left: 720, hanging: 720 },
-            spacing: { before: 60, after: 120, line: Math.round(config.lineSpacing * 240) },
-            children: [new TextRun({ ...common, text: block.text })],
+            spacing: { before: 0, after: 100, line: Math.round(config.lineSpacing * 240) },
+            keepLines: true,
+            children: [new TextRun({ ...common, text: refText })],
           })
         );
         break;
@@ -629,8 +639,7 @@ export async function buildDocx(
         type: groupIdx > 0 ? SectionType.NEXT_PAGE : undefined,
       },
       children: group.pages.flatMap((p, i) => {
-        const isLastInGroup = i === group.pages.length - 1;
-        return renderPage(p, config, !isLastInGroup, images);
+        return renderPage(p, config, false, images);
       }),
     };
 
