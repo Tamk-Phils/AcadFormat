@@ -324,12 +324,20 @@ function shouldMerge(prevLine: string, currLine: string, hasEmptyLineBetween: bo
   const curr = currLine.trim();
   if (!prev || !curr) return false;
 
+  // Never merge a line that starts with a list marker — it's a new list item
+  if (NUMBERED_ITEM_REGEX.test(curr) || BULLET_ITEM_REGEX.test(curr)) return false;
+  // Never merge into a line that starts a reference ("Author, A.")
+  if (/^[A-Z][a-zA-Z\s'-]+,\s+[A-Z]\./.test(curr)) return false;
+
   if (hasEmptyLineBetween) {
     // Only merge across an empty line if current line starts with lowercase
     return /^[a-z]/.test(curr);
   }
 
-  // Consecutive non-empty lines in the source text belong to the same paragraph
+  // Consecutive non-empty lines belong to the same paragraph
+  // UNLESS the previous line ends with a complete sentence
+  if (/[.!?]$/.test(prev) && /^[A-Z]/.test(curr)) return false;
+
   return true;
 }
 
@@ -558,7 +566,12 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       } else {
         const isBulletItem = BULLET_ITEM_REGEX.test(line);
         const isNumberedItem = NUMBERED_ITEM_REGEX.test(line);
-        const isReferenceLine = /^[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\./.test(line);
+        // Wider APA reference detection: "Author, A. (YYYY)" or "Author et al." or "Author & Author"
+        const isReferenceLine =
+          /^[A-Z][a-zA-Z\u00C0-\u024F'\-]+,\s+[A-Z][\.\s]/.test(line) ||
+          /^[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+\s+et\s+al\./.test(line) ||
+          /^[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+,\s+[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+,\s+&/.test(line) ||
+          /^[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+\s+\((?:19|20)\d{2}\)/.test(line);
 
         let cleanLine = line
           // Strip leading AI-generated dashes
@@ -664,19 +677,32 @@ function chunkBlocks(blocks: Block[]): Block[][] {
   }
   if (current.length > 0) pages.push(current);
 
-  // Never leave a heading or table caption orphaned as the last line of a page.
-  for (let i = 0; i < pages.length - 1; i += 1) {
+  // Pass 1 & 2: Never leave a heading or table caption orphaned as the LAST block on a page,
+  // and never allow a page to consist ONLY of headings/captions without body content.
+  let cleanedPages: Block[][] = [];
+  for (let i = 0; i < pages.length; i++) {
     const page = pages[i]!;
-    while (
-      page.length > 1 &&
-      (page[page.length - 1]!.type === "heading1" ||
-        page[page.length - 1]!.type === "heading2" ||
-        page[page.length - 1]!.type === "caption")
-    ) {
-      pages[i + 1]!.unshift(page.pop()!);
+    if (page.length === 0) continue;
+
+    // If this page is not the last page, check for trailing headings
+    if (i < pages.length - 1) {
+      const next = pages[i + 1]!;
+      // While page ends with a heading or caption, push it to top of next page
+      while (
+        page.length > 0 &&
+        (page[page.length - 1]!.type === "heading1" ||
+          page[page.length - 1]!.type === "heading2" ||
+          page[page.length - 1]!.type === "caption")
+      ) {
+        next.unshift(page.pop()!);
+      }
+    }
+
+    if (page.length > 0) {
+      cleanedPages.push(page);
     }
   }
-  return pages.length > 0 ? pages : [[]];
+  return cleanedPages.length > 0 ? cleanedPages : [[]];
 }
 
 function getTOCLevel(text: string): number {
@@ -814,6 +840,8 @@ export function buildFinalDocument(input: any): FinalDocument {
     logoImages = (model?.images ?? []).filter((image) => image.role === "logo") as any;
   }
 
+  const extractedRefs: string[] = [];
+
   // ---- Chapters (figures and tables renumbered per the institutional rule) ----
   (model?.chapters ?? []).forEach((chapter, chapterIndex) => {
     const chapterNumber = chapterIndex + 1;
@@ -835,10 +863,29 @@ export function buildFinalDocument(input: any): FinalDocument {
     ];
 
     const introBlocks = parseSectionContent(chapter.intro || "", model.images ?? [], chapter, model?.chapters);
-    rawBlocks.push(...introBlocks);
+    // Strip reference blocks from body intro and divert to extractedRefs
+    introBlocks.forEach((b) => {
+      if (b.type === "reference" && b.text) extractedRefs.push(b.text);
+      else rawBlocks.push(b);
+    });
 
     const sectionPageMarks: { title: string; blockIndex: number }[] = [];
-    chapter.sections.forEach((section, sectionIndex) => {
+    const validSections = (chapter.sections || []).filter((s) => {
+      const isRefSec = /^(references?|bibliograph|works cited|list of references)/i.test(s.title || "");
+      if (isRefSec && s.content) {
+        // Extract references from dedicated reference sections
+        s.content.split("\n").forEach((line) => {
+          const trimmed = line.replace(/^[—–]\s+/, "").replace(/\bREQUIRES_USER_REVIEW\b/g, "").trim();
+          if (trimmed && trimmed.length > 10 && !/^(references?|bibliograph)/i.test(trimmed)) {
+            extractedRefs.push(trimmed);
+          }
+        });
+        return false;
+      }
+      return true;
+    });
+
+    validSections.forEach((section, sectionIndex) => {
       const number = `${chapterNumber}.${sectionIndex + 1}`;
       let sectionTitle = cleanTitle(section.title).replace(/^(?:\d+\.)+\d*\s*/, "").trim();
       if (!sectionTitle) sectionTitle = `Section ${sectionIndex + 1}`;
@@ -846,7 +893,11 @@ export function buildFinalDocument(input: any): FinalDocument {
       rawBlocks.push({ type: "heading2", text: `${number} ${sectionTitle}` });
 
       const sectionBlocks = parseSectionContent(section.content, model.images ?? [], chapter, model?.chapters);
-      rawBlocks.push(...sectionBlocks);
+      // Strip reference blocks from chapter section body and divert to extractedRefs
+      sectionBlocks.forEach((b) => {
+        if (b.type === "reference" && b.text) extractedRefs.push(b.text);
+        else rawBlocks.push(b);
+      });
     });
 
     // 2. Post-process to insert captions, renumber figures and tables, and record page marks
@@ -1026,12 +1077,12 @@ export function buildFinalDocument(input: any): FinalDocument {
   });
 
   // ---- References (never a chapter) ----
-  const refs = model?.references ?? [];
+  const refs = [...(model?.references ?? []), ...extractedRefs];
   if (refs.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "REFERENCES" }];
     const safeRefs = refs
       .map(r => typeof r === "string" ? r : (r as any)?.text || (r as any)?.title || String(r || ""))
-      .map(r => r.trim())
+      .map(r => r.replace(/\bREQUIRES_USER_REVIEW\b/g, "").replace(/^[—–]\s+/, "").trim())
       .filter(r => r.length > 0 && r !== "undefined" && r !== "null")
       // Deduplicate: normalise whitespace then unique
       .filter((r, idx, arr) => arr.findIndex(x => x.replace(/\s+/g, " ") === r.replace(/\s+/g, " ")) === idx)
@@ -1054,10 +1105,26 @@ export function buildFinalDocument(input: any): FinalDocument {
     toc.push({ label: "", text: "APPENDICES", page: String(page), level: 1 });
   }
 
-  const listOfAbbreviations = (model?.abbreviations ?? []).map((a: any) => ({
-    label: a.abbreviation || a.term || a.word || "",
-    text: a.meaning || a.definition || a.expansion || "",
-  }));
+  const listOfAbbreviations = (model?.abbreviations ?? [])
+    .map((a: any) => ({
+      label: (a.abbreviation || a.term || a.word || a.short || "")
+        .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+        .replace(/^[—–]\s+/, "")
+        .trim(),
+      text: (a.meaning || a.definition || a.expansion || a.long || "")
+        .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+        .replace(/^[—–]\s+/, "")
+        .trim(),
+    }))
+    .filter(
+      (a: any) =>
+        a.label &&
+        a.text &&
+        a.label !== "undefined" &&
+        a.text !== "undefined" &&
+        a.label !== "null" &&
+        a.text !== "null"
+    );
 
   // ---- Preliminary pages (roman numerals, generated lists) ----
   const prelimPages: RenderedPage[] = [];
