@@ -1172,46 +1172,38 @@ export function buildFinalDocument(input: any): FinalDocument {
   const coverBlocks: Block[] = [];
 
   if (isUba && isFinalYearWork) {
-    const schoolUpper = schoolStr.toUpperCase();
-    const leftSchoolLines = schoolUpper.startsWith("THE ")
-      ? wrapTextToLines(schoolUpper, 20)
-      : wrapTextToLines("THE " + schoolUpper, 20);
+    const isPhD = selection.level?.toLowerCase().includes("phd") || selection.level?.toLowerCase().includes("doctor");
+    const degreeType = isPhD ? "Doctor of Philosophy (Ph.D)" : (selection.level || "Master of Science");
+    const workLabelText = isPhD ? "Thesis" : "Dissertation";
+    const deptName = cleanDept(meta.department || selection.department || "COMPUTER ENGINEERING");
+    const optionStr = (meta.specialty || deptName).toUpperCase();
 
     coverBlocks.push(
-      { type: "center" as const, text: "THE UNIVERSITY OF BAMENDA", bold: true, size: 16 },
-      {
-        type: "bilingual" as const,
-        text: "",
-        left: leftSchoolLines,
-        right: [
-          "DEPARTMENT OF",
-          cleanDept(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()
-        ],
-        imageIds: ["logo-uba"]
-      },
       { type: "spacer" as const, text: "" },
-      {
-        type: "title" as const,
-        text: meta.title.toUpperCase(),
-        borderBox: true
-      },
+      { type: "center" as const, text: `A ${workLabelText} submitted to the Department of ${deptName} in the College of Technology of the University of Bamenda in partial fulfillment of the requirements for the award of a ${degreeType} Degree in ${deptName}` },
+      { type: "center" as const, text: `(OPTION: ${optionStr})` },
       { type: "spacer" as const, text: "" },
-      {
-        type: "center" as const,
-        text: `A ${workLabel(selection.documentType, selection.level)} Submitted to the Department of ${cleanDept(meta.department || selection.department || "Computer Engineering")} in the ${selection.school} of the University of Bamenda in Partial Fulfillment of the Requirements for the Award of a ${selection.level || "Bachelor of Science"} Degree in ${cleanDept(meta.department || selection.department || "Computer Engineering")}.`,
-        italic: true
-      },
+      { type: "center" as const, text: "BY:" },
+      { type: "center" as const, text: (meta.author || "AUTHOR NAME").toUpperCase() },
+      { type: "center" as const, text: `REGISTRATION NUMBER : ${(meta.registrationNumber || "—").toUpperCase()}` },
+      { type: "center" as const, text: "DEGREE OF AUTHOR" }, // Placeholder for degree
       { type: "spacer" as const, text: "" },
-      { type: "center" as const, text: "BY:", bold: true },
-      { type: "center" as const, text: (meta.author || "AUTHOR NAME").toUpperCase(), bold: true },
-      { type: "center" as const, text: `REGISTRATION NUMBER: ${(meta.registrationNumber || "—").toUpperCase()}`, bold: true },
       { type: "spacer" as const, text: "" },
-      { type: "center" as const, text: "SUPERVISOR(S):", bold: true },
+      { type: "center" as const, text: (meta.monthYear || "").toUpperCase() },
+      { type: "spacer" as const, text: "" },
+      { type: "title" as const, text: (meta.title || "TITLE OF STUDY").toUpperCase() },
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: "SUPERVISOR(S) :" },
       ...(meta.supervisors?.length
-        ? meta.supervisors.map((s: any) => ({ type: "center" as const, text: s.toUpperCase(), bold: true }))
-        : [{ type: "center" as const, text: "—", bold: true }]),
+        ? meta.supervisors.map((s: any) => ({ type: "center" as const, text: s.toUpperCase() }))
+        : [{ type: "center" as const, text: "—" }]),
       { type: "spacer" as const, text: "" },
-      { type: "center" as const, text: (meta.monthYear || "").toUpperCase(), bold: true }
+      { type: "spacer" as const, text: "" },
+      { type: "center" as const, text: "DEPARTMENT OF" },
+      { type: "center" as const, text: deptName.toUpperCase() },
+      { type: "center" as const, text: "THE COLLEGE OF" },
+      { type: "center" as const, text: "TECHNOLOGY" },
+      { type: "center" as const, text: "THE UNIVERSITY OF BAMENDA" }
     );
   } else {
     coverBlocks.push(
@@ -1369,12 +1361,18 @@ export function buildFinalDocument(input: any): FinalDocument {
     const existing = (model?.preliminary || []).find((p: any) => p.type === type);
     const content = existing?.content?.trim();
 
-    if (isUba && isFinalYearWork) {
+    if (isUba && isFinalYearWork && isColtech) {
+      const isPhD = selection.level?.toLowerCase().includes("phd") || selection.level?.toLowerCase().includes("doctor");
+      const isMaster = selection.level?.toLowerCase().includes("master");
+      const degreeType = isPhD ? "Doctor of Philosophy (Ph.D) degree" : "Master of Science Degree";
+      const workLabelText = isPhD ? "thesis" : "dissertation";
+      const deptName = cleanDept(meta.department || selection.department || "COMPUTER ENGINEERING");
+      const optionStr = (meta.specialty || deptName).toUpperCase();
+
       if (type === "CERTIFICATION") {
-        const isMaster = selection.level?.toLowerCase().includes("master");
         const titleText = isMaster ? "CERTIFICATION OF CORRECTIONS AFTER DEFENSE" : "CERTIFICATION";
         
-        const defaultContent = `This is to certify that this dissertation titled “${(meta.title || "TITLE OF STUDY").toUpperCase()}” is the original work of ${(meta.author || "AUTHOR NAME").toUpperCase()}. This work is submitted in partial fulfillment of the requirements for the award of a ${selection.level || "Master of Science"} Degree in ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()} in the ${selection.school || "College of Technology"} of The University of Bamenda.`;
+        const defaultContent = `This is to certify that this ${workLabelText} titled “${(meta.title || "TITLE OF STUDY")}” is the original work of ${meta.author || "AUTHOR NAME"}. This work is submitted in partial fulfillment of the requirements for the award of a ${degreeType} in ${deptName} in the College of Technology of The University of Bamenda, Cameroon.`;
         const actualContent = content || defaultContent;
         
         const blocks: Block[] = [
@@ -1386,31 +1384,31 @@ export function buildFinalDocument(input: any): FinalDocument {
 
         if (isMaster) {
           blocks.push(
-            { type: "para", text: `Supervisor : __________________________________________________________________`, bold: true },
-            { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR NAME").toUpperCase()}`, bold: true },
+            { type: "para", text: `Supervisor : ______________________________________________________` },
+            { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR NAME")}` },
             { type: "spacer", text: "" },
-            { type: "para", text: `The Head of Department : ______________________________________________________`, bold: true },
-            { type: "para", text: `Pr. ${(meta.headOfDepartment || "HEAD OF DEPARTMENT NAME").toUpperCase()}`, bold: true },
+            { type: "para", text: `The Head of Department : __________________________________________` },
+            { type: "para", text: `Pr. ${(meta.headOfDepartment || "HEAD OF DEPARTMENT NAME")}` },
             { type: "spacer", text: "" },
-            { type: "para", text: `The Director : ________________________________________________________________`, bold: true },
-            { type: "para", text: `Pr. ${(meta.director || "DIRECTOR NAME").toUpperCase()}`, bold: true }
+            { type: "para", text: `The Director : ____________________________________________________` },
+            { type: "para", text: `Pr. ${(meta.director || "DIRECTOR NAME")}` }
           );
         } else {
           blocks.push(
-            { type: "para", text: `Supervisor (s)`, bold: true },
-            { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR 1").toUpperCase()} : __________________________________________________` },
+            { type: "para", text: `Supervisor (s)` },
+            { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR 1")} : _____________________________________________` },
             ...(meta.supervisors && meta.supervisors.length > 1
               ? meta.supervisors.slice(1).map((s: any) => ({
                   type: "para" as const,
-                  text: `Pr. ${s.toUpperCase()} : __________________________________________________`
+                  text: `Pr. ${s} : _____________________________________________`
                 }))
-              : [{ type: "para" as const, text: `Pr. ${(meta.supervisors?.[1] || "SUPERVISOR 2").toUpperCase()} : __________________________________________________` }]),
+              : [{ type: "para" as const, text: `Pr. ${(meta.supervisors?.[1] || "SUPERVISOR 2")} : _____________________________________________` }]),
             { type: "spacer", text: "" },
-            { type: "para", text: `The Head of Department`, bold: true },
-            { type: "para", text: `Pr. ${(meta.headOfDepartment || "HEAD OF DEPARTMENT").toUpperCase()} : __________________________________________________` },
+            { type: "para", text: `The Head of Department` },
+            { type: "para", text: `Pr. ${(meta.headOfDepartment || "HEAD OF DEPARTMENT")}: __________________________________________` },
             { type: "spacer", text: "" },
-            { type: "para", text: `The Director`, bold: true },
-            { type: "para", text: `Pr. ${(meta.director || "DIRECTOR").toUpperCase()} : __________________________________________________` }
+            { type: "para", text: `The Director` },
+            { type: "para", text: `Pr. ${(meta.director || "DIRECTOR")}: ___________________________________________` }
           );
         }
 
@@ -1419,7 +1417,7 @@ export function buildFinalDocument(input: any): FinalDocument {
       }
 
       if (type === "DECLARATION") {
-        const defaultContent = `I, ${(meta.author || "AUTHOR NAME").toUpperCase()}, registration N° : ${(meta.registrationNumber || "—").toUpperCase()}, in the Department of ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()} in the ${selection.school || "College of Technology"} of The University of Bamenda hereby declare that this work titled “${(meta.title || "TITLE OF STUDY").toUpperCase()}” is my original work. It has not been presented in any application for a degree or any academic pursuit. I have acknowledged all borrowed ideas nationally and internationally through citations.`;
+        const defaultContent = `I, ${meta.author || "AUTHOR NAME"}, registration N◦ : ${meta.registrationNumber || "—"}, in the Department of ${deptName}, College of Technology, The University of Bamenda hereby declare that, this work titled “${meta.title || "TITLE OF STUDY"}” is my original work. It has not been presented in any application for a degree or any academic pursuit. I have acknowledged all borrowed ideas nationally and internationally through citations.`;
         const actualContent = content || defaultContent;
 
         addPrelim(type, "Declaration of Originality of Study", [
@@ -1427,18 +1425,16 @@ export function buildFinalDocument(input: any): FinalDocument {
           { type: "spacer", text: "" },
           { type: "para", text: actualContent },
           { type: "spacer", text: "" },
-          { type: "spacer", text: "" },
-          { type: "para", text: `Date: ________________________            Signature of author ____________________`, bold: true }
+          { type: "para", text: `Date: ___________________ Signature of author ________________` }
         ], "preliminary");
         continue;
       }
 
       if (type === "ACCEPTANCE") {
-        const isPhD = selection.level?.toLowerCase().includes("phd") || selection.level?.toLowerCase().includes("doctor");
         const titleText = isPhD ? "ACCEPTANCE OF THESIS" : "ACCEPTANCE OF DISSERTATION";
-        const committeeLabel = isPhD ? "PhD Thesis Committee" : "Master’s Dissertation Committee";
+        const committeeLabel = isPhD ? "Chairperson, PhD Thesis Committee" : "Chairperson, Master’s Dissertation Committee";
 
-        const defaultContent = `Having met the stipulated requirements, this dissertation entitled “${(meta.title || "TITLE OF STUDY").toUpperCase()}” has been accepted by the Postgraduate School of The University of Bamenda in partial fulfillment of the requirements for the award of a ${selection.level || "Master of Science"} Degree in ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()} (Specialty : ${(meta.department || selection.department || "COMPUTER ENGINEERING").toUpperCase()}).`;
+        const defaultContent = `Having met the stipulated requirements, this ${workLabelText} entitled “${meta.title || "TITLE OF STUDY"}” has been accepted by the Postgraduate School of The University of Bamenda in partial fulfillment of the requirements for the award of a ${degreeType} in ${deptName} (Specialty : ${optionStr}).`;
         const actualContent = content || defaultContent;
 
         const blocks: Block[] = [
@@ -1446,20 +1442,10 @@ export function buildFinalDocument(input: any): FinalDocument {
           { type: "spacer", text: "" },
           { type: "para", text: actualContent },
           { type: "spacer", text: "" },
-          { type: "para", text: `Chairperson, ${committeeLabel} : ___________________________`, bold: true },
-          { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR NAME").toUpperCase()}`, bold: true },
-          { type: "spacer", text: "" },
-          { type: "para", text: `                                            Date : ___________________________`, bold: true }
+          { type: "para", text: `${committeeLabel} : ________________________` },
+          { type: "para", text: `Pr. ${(meta.supervisors?.[0] || "SUPERVISOR NAME")}` },
+          { type: "para", text: `Date : __________________________` }
         ];
-
-        if (isPhD) {
-          blocks.push(
-            { type: "spacer", text: "" },
-            { type: "para", text: `Mathias Fru Fonteh, PhD`, bold: true },
-            { type: "para", text: `Professor of Water Resources Management`, italic: true },
-            { type: "para", text: `Director`, bold: true }
-          );
-        }
 
         addPrelim(type, titleText, blocks, "preliminary");
         continue;
@@ -1469,6 +1455,9 @@ export function buildFinalDocument(input: any): FinalDocument {
     const cleanDefaultContent = (secType: SectionType, secTitle: string): string => {
       switch (secType) {
         case "COPYRIGHT":
+          if (isUba && isColtech && isFinalYearWork) {
+            return `©Copyright by ${meta.author || "NAME OF AUTHOR"}, ${(meta.monthYear || new Date().getFullYear().toString()).split(" ").pop()}\nAll rights reserved`;
+          }
           return `All rights reserved. No part of this publication may be reproduced, stored in a retrieval system, or transmitted in any form or by any means, electronic, mechanical, photocopying, recording or otherwise, without prior written permission of the author or ${uniStr || "The University of Bamenda"}.`;
         case "ABSTRACT":
           return `This ${workLabel(docTypeStr, selection?.level || "")} presents an in-depth investigation into ${meta.title || "the subject of study"}. The study formulates the core architecture, evaluates performance metrics, and establishes practical implementation guidelines in accordance with institutional standards.`;
