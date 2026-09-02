@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import {
   COLTECH_CONFIG,
@@ -55,7 +54,6 @@ function InstitutionsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader user={user} />
       <main className="mx-auto max-w-6xl px-5 py-12">
         {/* Header */}
         <div className="text-center">

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SiteHeader } from "@/components/SiteHeader";
 import { Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
@@ -134,12 +133,11 @@ function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <SiteHeader />
-      <main className="mx-auto flex max-w-md flex-col justify-center px-5 py-16">
-        <Card className="shadow-soft">
+    <div className="w-full flex justify-center items-center min-h-[80vh] font-sans">
+      <main className="w-full max-w-md px-5">
+        <Card className="glass-panel rounded-[2rem] border-white/20 text-white">
           <CardHeader>
-            <CardTitle className="font-display text-3xl">
+            <CardTitle className="font-bold text-3xl">
               {mode === "signin" ? "Welcome back" : "Create your account"}
             </CardTitle>
             <CardDescription>

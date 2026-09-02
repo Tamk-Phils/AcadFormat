@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import {
   ShieldCheck,
@@ -446,7 +445,6 @@ function AdminPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col justify-between">
-        <SiteHeader user={null} />
         <div className="flex-1 flex items-center justify-center p-5">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl">
             <div className="text-center">
@@ -527,7 +525,6 @@ function AdminPage() {
   // Dashboard View
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader user={null} />
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-border pb-6">

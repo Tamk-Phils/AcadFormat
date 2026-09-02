@@ -4,7 +4,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { SiteHeader } from "@/components/SiteHeader";
 import { DocumentPreview } from "@/components/workspace/DocumentPreview";
 import { OriginalPreview } from "@/components/workspace/OriginalPreview";
 import { FullScreenPreviewModal } from "@/components/workspace/FullScreenPreviewModal";
@@ -359,9 +358,8 @@ function Workspace() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#030712] text-slate-50 font-sans">
-      <SiteHeader user={user} />
-      <main className="mx-auto max-w-6xl px-3 sm:px-5 py-6 sm:py-10 w-full overflow-x-hidden">
+    <div className="w-full flex flex-col font-sans">
+      <main className="mx-auto max-w-7xl px-3 sm:px-5 w-full">
         {/* Mobile Quick Section Switcher Bar */}
         <div className="sticky top-0 z-30 bg-[#030712]/95 backdrop-blur-md border-b border-white/10 py-2 px-1 mb-4 flex items-center justify-between overflow-x-auto gap-2 text-xs scrollbar-none sm:hidden">
           <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 whitespace-nowrap" onClick={() => scrollToSection("section-1")}>

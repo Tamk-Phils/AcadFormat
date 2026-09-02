@@ -133,13 +133,21 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+import { SpatialNav } from "@/components/SpatialNav";
+import type { User } from "@supabase/supabase-js";
+import { useState } from "react";
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      setUser(session?.user ?? null);
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
     });
@@ -148,10 +156,19 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      <Toaster />
-      <BackToTop />
+      <div className="min-h-screen w-full spatial-bg text-slate-50 font-sans selection:bg-indigo-500/30">
+        {/* Dark overlay for readability */}
+        <div className="fixed inset-0 bg-black/40 pointer-events-none" />
+        
+        <SpatialNav user={user} />
+        
+        <div className="relative z-10 w-full min-h-screen flex flex-col pl-0 md:pl-24 pr-0 md:pr-4 py-4 md:py-8">
+          <Outlet />
+        </div>
+        
+        <Toaster />
+        <BackToTop />
+      </div>
     </QueryClientProvider>
   );
 }

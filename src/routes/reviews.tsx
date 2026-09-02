@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { SiteHeader } from "@/components/SiteHeader";
 import { Button } from "@/components/ui/button";
 import {
   Star,
@@ -138,7 +137,6 @@ function ReviewsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader user={user} />
       <main className="mx-auto max-w-6xl px-5 py-12">
         {/* Hero Section */}
         <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-secondary/80 via-background to-secondary/30 p-8 sm:p-12 text-center shadow-sm">
