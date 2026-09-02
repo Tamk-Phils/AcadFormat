@@ -359,11 +359,11 @@ function Workspace() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#030712] text-slate-50 font-sans">
       <SiteHeader user={user} />
       <main className="mx-auto max-w-6xl px-3 sm:px-5 py-6 sm:py-10 w-full overflow-x-hidden">
         {/* Mobile Quick Section Switcher Bar */}
-        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border py-2 px-1 mb-4 flex items-center justify-between overflow-x-auto gap-2 text-xs scrollbar-none sm:hidden">
+        <div className="sticky top-0 z-30 bg-[#030712]/95 backdrop-blur-md border-b border-white/10 py-2 px-1 mb-4 flex items-center justify-between overflow-x-auto gap-2 text-xs scrollbar-none sm:hidden">
           <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 whitespace-nowrap" onClick={() => scrollToSection("section-1")}>
             1. Analysis
           </Button>
@@ -389,8 +389,8 @@ function Workspace() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="font-display text-2xl sm:text-3xl">{doc.data?.file_name ?? "Document"}</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">
+            <h1 className="font-display text-2xl sm:text-3xl text-white">{doc.data?.file_name ?? "Document"}</h1>
+            <p className="text-xs sm:text-sm text-slate-400">
               {config.label} · {config.source}
             </p>
           </div>
@@ -404,8 +404,8 @@ function Workspace() {
         )}
 
         {/* Step 1 — Understand & analyse */}
-        <Card id="section-1" className="mt-6 sm:mt-8 shadow-soft">
-          <CardHeader>
+        <Card id="section-1" className="mt-6 sm:mt-8 shadow-soft border-white/10 bg-white/5 backdrop-blur-md text-white shadow-xl">
+          <CardHeader className="border-b border-white/10 bg-white/[0.02]">
             <CardTitle className="font-display text-xl sm:text-2xl">1 · Understand &amp; analyse</CardTitle>
             <CardDescription>
               The engine reads the whole document, learns what the work is about, then audits it.
@@ -480,8 +480,8 @@ function Workspace() {
 
         {/* Step 1b — Your document as uploaded */}
         {original.data && original.data.blocks.length > 0 && (
-          <Card id="section-1b" className="mt-6 sm:mt-8 shadow-soft">
-            <CardHeader>
+          <Card id="section-1b" className="mt-6 sm:mt-8 shadow-soft border-white/10 bg-white/5 backdrop-blur-md text-white shadow-xl">
+            <CardHeader className="border-b border-white/10 bg-white/[0.02]">
               <CardTitle className="font-display text-xl sm:text-2xl">
                 1b · Your document as uploaded
               </CardTitle>
@@ -500,8 +500,8 @@ function Workspace() {
 
         {/* Step 2 — Review proposals */}
         {issues.data && issues.data.length > 0 && (
-          <Card id="section-2" className="mt-6 sm:mt-8 shadow-soft">
-            <CardHeader>
+          <Card id="section-2" className="mt-6 sm:mt-8 shadow-soft border-white/10 bg-white/5 backdrop-blur-md text-white shadow-xl">
+            <CardHeader className="border-b border-white/10 bg-white/[0.02]">
               <CardTitle className="font-display text-xl sm:text-2xl">2 · Review proposals</CardTitle>
               <CardDescription>
                 Nothing is changed until you accept it. Reject to keep your original wording.
@@ -516,8 +516,8 @@ function Workspace() {
         )}
 
         {/* Step 3 — Institution + format */}
-        <Card id="section-3" className="mt-6 sm:mt-8 shadow-soft">
-          <CardHeader>
+        <Card id="section-3" className="mt-6 sm:mt-8 shadow-soft border-white/10 bg-white/5 backdrop-blur-md text-white shadow-xl">
+          <CardHeader className="border-b border-white/10 bg-white/[0.02]">
             <CardTitle className="font-display text-xl sm:text-2xl">3 · Institutional format</CardTitle>
             <CardDescription>
               Only verified configurations are offered. COLTECH uses its own official rules.
@@ -601,7 +601,7 @@ function Workspace() {
 
         {/* Step 4 — Verify & preview */}
         {final && (
-          <Card id="section-4" className="mt-6 sm:mt-8 shadow-soft">
+          <Card id="section-4" className="mt-6 sm:mt-8 shadow-soft border-white/10 bg-white/5 backdrop-blur-md text-white shadow-xl">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
               <div>
                 <CardTitle className="font-display text-xl sm:text-2xl">4 · Verify &amp; preview</CardTitle>
