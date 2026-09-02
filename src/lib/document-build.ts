@@ -1009,7 +1009,8 @@ export function buildFinalDocument(input: any): FinalDocument {
   const refs = model?.references ?? [];
   if (refs.length > 0) {
     const blocks: Block[] = [{ type: "heading1", text: "REFERENCES" }];
-    [...refs]
+    const safeRefs = refs.map(r => typeof r === "string" ? r : (r as any)?.text || (r as any)?.title || String(r || ""));
+    [...safeRefs]
       .sort((a, b) => a.localeCompare(b))
       .forEach((reference) => blocks.push({ type: "listline", text: reference }));
     const page = pushBody("References", blocks, "back");
