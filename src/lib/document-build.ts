@@ -559,8 +559,7 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
       parsePdfTableLine(line) !== null ||
       /^Device\s*\(Hostname\)\s+Interface/i.test(line) ||
       /^Ports\s+Assignment\s+Network/i.test(line) ||
-      /\t/.test(line) ||
-      (line.includes("  ") && line.split(/\s{2,}/).filter((s: any) => s.trim()).length >= 3);
+      (/\t/.test(line) && line.split("\t").filter((s: any) => s.trim()).length >= 2);
 
     const isTableRow =
       !isCodeLine(line) &&
@@ -568,7 +567,6 @@ function parseSectionContent(content: string, finalImages: { id: string }[], cha
         isExplicitPipeTable ||
         isDivider ||
         isExplicitTableLine ||
-        (inTable && line.split(/\s{2,}/).filter((s: any) => s.trim()).length >= 2) ||
         (isCaptionLine && checkNextIsTable()));
 
     if (isTableRow) {
