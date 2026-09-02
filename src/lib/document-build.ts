@@ -8,6 +8,8 @@ import type {
 import type { InstitutionConfig, InstitutionSelection, SectionType } from "./institutions";
 import { resolveConfig, workLabel, COMMON_CONFIG } from "./institutions";
 import { parseTableRows, isPreambleNoiseLine } from "./utils";
+import { SemanticASTEngine } from "./ast/engine";
+import { ASTCompiler } from "./ast/compiler";
 import { reassembleReferences } from "./references";
 
 /** Approximate characters that fit on one A4/Letter page at 12pt, 1.5 spacing. */
@@ -357,297 +359,56 @@ function cleanDept(dept: string): string {
 }
 
 function parseSectionContent(content: string, finalImages: { id: string }[], chapter?: any, allChapters?: any[]): Block[] {
-  const blocks: Block[] = [];
-  const textStr = typeof content === "string" ? content : String(content ?? "");
-  const rawLines = textStr.split("\n");
-  const lines: string[] = [];
-  rawLines.forEach((rawLine) => {
-    // Strip AI-generated noise placeholders
-    const noPlaceholder = rawLine
-      .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
-      .replace(/\bundefined\b/g, "")
-      .replace(/\bnull\b/g, "")
-      .replace(/```[a-z]*/gi, "")
-      .replace(/```/g, "");
+  // Strip AI-generated noise placeholders that might mess up the AST
+  const cleanContent = typeof content === "string" ? content : String(content ?? "");
+  let noPlaceholder = cleanContent
+    .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
+    .replace(/\bundefined\b/g, "")
+    .replace(/\bnull\b/g, "");
 
-    // Pre-split inline [IMAGE:...] markers so they become standalone line items
-    const imageChunks = noPlaceholder.split(/(?=\[IMAGE(?::\d+)?\])|(?<=\[IMAGE(?::\d+)?\])/i);
-    imageChunks.forEach((chunk) => {
-      // ── Inline run-in enumeration splitter ──────────────────────────────────
-      // Handles patterns like: "RQ1 ... RQ2 ...", "(i)... (ii)...", "1. ... 2. ..."
-      // Split BEFORE the list marker so each item starts its own line
-      const runInSplit = chunk.split(
-        /(?=\b(?:R?Q\s*\d+)[.:)!?\s]|(?:(?:x{0,3})(?:ix|iv|v?i{0,3})|(?:X{0,3})(?:IX|IV|V?I{0,3}))\.\s|\((?:(?:x{0,3})(?:ix|iv|v?i{0,3})|(?:X{0,3})(?:IX|IV|V?I{0,3})|[a-zA-Z]{1,4}|\d{1,2})\)\s*)/i
-      );
-      runInSplit.forEach((sub) => {
-        // Split inline list/layer markers like (i)... (ii)... (iii)... or Layer Name:
-        const listSplit = sub.split(/(?=\b(?:Data Ingestion Layer|Feature Extraction Layer|Detection Engine Layer|Decision and Alerting Layer|Presentation Layer|Programming and modelling:|NLP processing:|Service architecture:|Dashboard:|Version control and documentation:)\s*)/i);
-        listSplit.forEach((subItem) => {
-          const parts = subItem.split(BULLET_SPLIT_REGEX);
-          parts.forEach((part) => {
-            if (part.trim()) lines.push(part.trim());
-          });
-        });
-      });
-    });
-  });
-
+  // Pre-process raw PDF spaced text into valid Markdown tables for the AST to consume
+  const lines = noPlaceholder.split("\n");
+  const processedLines: string[] = [];
   let inTable = false;
-  let tableLines: string[] = [];
-  let pendingPara: string[] = [];
-  let pendingCode: string[] = [];
-  let hasEmptyLine = false;
-
-  const flushPara = () => {
-    if (pendingPara.length === 0) return;
-    const text = pendingPara.join(" ").trim();
-    if (text) {
-      blocks.push({ type: "para", text });
-    }
-    pendingPara = [];
-  };
-
-  const flushCode = () => {
-    if (pendingCode.length === 0) return;
-    const text = pendingCode.join("\n").trim();
-    if (text) {
-      blocks.push({ type: "code", text });
-    }
-    pendingCode = [];
-  };
-
-  const flushTable = () => {
-    if (tableLines.length === 0) return;
-
-    let tableCaptionText = "";
-    const rawRows: string[][] = [];
-
-    tableLines.forEach((line: string) => {
-      const trimmedLine = line.trim();
-      if (/^(table|tab\.)\s*\d+/i.test(trimmedLine)) {
-        tableCaptionText = trimmedLine;
-        return;
-      }
-
-      let cells: string[] = [];
-      const pdfParsed = parsePdfTableLine(trimmedLine);
-      if (pdfParsed) {
-        cells = pdfParsed;
-      } else if (trimmedLine.includes("  |  ")) {
-        cells = trimmedLine.split("  |  ");
-      } else if (trimmedLine.includes("|")) {
-        cells = trimmedLine.split("|");
-        if (trimmedLine.startsWith("|")) cells.shift();
-        if (trimmedLine.endsWith("|")) cells.pop();
-      } else if (trimmedLine.includes("\t")) {
-        cells = trimmedLine.split("\t");
-      } else if (/\S\s{2,}\S/.test(trimmedLine)) {
-        cells = trimmedLine.split(/\s{2,}/);
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const tableCells = parsePdfTableLine(trimmed);
+    
+    if (tableCells && tableCells.length > 1) {
+      if (!inTable) {
+        inTable = true;
+        // Inject Markdown Table Header separators when starting a table
+        processedLines.push("| " + tableCells.join(" | ") + " |");
+        processedLines.push("|" + tableCells.map(() => "---").join("|") + "|");
       } else {
-        return;
+        processedLines.push("| " + tableCells.join(" | ") + " |");
       }
-
-      const trimmedCells = cells.map((c) => c.trim());
-      const isSeparator = trimmedCells.every((c) => !c || /^[:\-\s]+$/.test(c));
-      if (!isSeparator && trimmedCells.some((c) => c.length > 0)) {
-        rawRows.push(trimmedCells);
-      }
-    });
-
-    // Table captions MUST go ABOVE the table — store pending caption, emit after table
-    if (tableCaptionText) {
-      blocks.push({ type: "caption", text: tableCaptionText });
-    }
-
-    if (rawRows.length > 0) {
-      const fullText = rawRows.flatMap((r) => r).join(" ");
-      const maxCols = Math.max(...rawRows.map((r) => r.length));
-      const paddedRows = rawRows.map((r) => {
-        const copy = [...r];
-        while (copy.length < maxCols) copy.push("");
-        return copy;
-      });
-
-      blocks.push({
-        type: "table",
-        text: tableLines.join("\n"),
-        tableRows: paddedRows,
-      });
-    }
-    tableLines = [];
-    inTable = false;
-  };
-
-  for (let i = 0; i < lines.length; i += 1) {
-    let line = lines[i]!.trim();
-    if (!line) {
-      hasEmptyLine = true;
-      if (inTable) flushTable();
-      flushCode();
-      continue;
-    }
-
-    // Clean leading PDF/OCR leading period artifacts (e.g. ". Organisations..." -> "Organisations...")
-    line = line.replace(/^\.\s+(?=[A-Z0-9\(\)])/, "");
-
-    // Clean leading em-dash/en-dash/hyphen artifacts when NOT a valid bullet item (e.g. " — for example..." -> "for example...")
-    if (!BULLET_ITEM_REGEX.test(line)) {
-      line = line.replace(/^[—–\-]\s+/, "");
-    }
-
-    // Skip page headers & footers (e.g. "Page 1", "Basic VLAN Configuration - Lab Guide...")
-    if (isHeaderFooterNoise(line)) {
-      continue;
-    }
-
-    const imageMatch = line.match(/^\[IMAGE\s*:\s*(\d+)\]$/i) || line.match(/^\[IMAGE\]$/i) || line.match(/^\[IMAGE\s*:\s*(img-\d+)\]$/i);
-    if (imageMatch) {
-      flushPara();
-      flushCode();
-      hasEmptyLine = false;
-      if (inTable) flushTable();
-      const imageIndex = imageMatch[1];
-      const imageId = imageIndex !== undefined ? (imageIndex.startsWith("img-") ? imageIndex : `img-${imageIndex}`) : undefined;
-      const foundImage = finalImages.find((img) =>
-        img.id === imageId || img.id === `img-${imageIndex}` || img.id === imageIndex
-      ) || (imageIndex !== undefined && !isNaN(Number(imageIndex)) ? finalImages[Number(imageIndex)] : undefined);
-
-      if (foundImage) {
-        blocks.push({ type: "image", text: "", imageId: foundImage.id });
-      } else if (finalImages.length > 0) {
-        const fallback = finalImages[blocks.filter(b => b.type === "image").length % finalImages.length];
-        blocks.push({ type: "image", text: "", imageId: fallback!.id });
-      } else {
-        blocks.push({ type: "center", text: `[ Figure Image ${imageIndex || ""} ]` });
-      }
-      continue;
-    }
-
-    // Check for CLI command lines or code blocks
-    if (isCodeLine(line)) {
-      flushPara();
-      if (inTable) flushTable();
-      pendingCode.push(line);
-      hasEmptyLine = false;
-      continue;
     } else {
-      flushCode();
-    }
-
-    // Check for fill-in-the-blank underline prompt lines
-    if (/^_{5,}$/.test(line)) {
-      flushPara();
-      if (inTable) flushTable();
-      blocks.push({ type: "para", text: line });
-      hasEmptyLine = false;
-      continue;
-    }
-
-    const isCaptionLine = /^(table|tab\.)\s*\d+/i.test(line);
-    const pipeCount = (line.match(/\|/g) || []).length;
-    const hasPipes = pipeCount >= 2;
-    const isExplicitPipeTable = line.includes("  |  ") || (line.startsWith("|") && line.endsWith("|"));
-    const isDivider = /^[:\|\-\s]{3,}$/.test(line) && line.includes("-") && line.includes("|");
-
-    const checkNextIsTable = () => {
-      if (i + 1 >= lines.length) return false;
-      const next = lines[i + 1]!.trim();
-      return (next.match(/\|/g) || []).length >= 2 || next.includes("  |  ");
-    };
-
-    const isExplicitTableLine =
-      parsePdfTableLine(line) !== null ||
-      /^Device\s*\(Hostname\)\s+Interface/i.test(line) ||
-      /^Ports\s+Assignment\s+Network/i.test(line) ||
-      (/\t/.test(line) && line.split("\t").filter((s: any) => s.trim()).length >= 2);
-
-    const isTableRow =
-      !isCodeLine(line) &&
-      (hasPipes ||
-        isExplicitPipeTable ||
-        isDivider ||
-        isExplicitTableLine ||
-        (isCaptionLine && checkNextIsTable()));
-
-    if (isTableRow) {
-      flushPara();
-      hasEmptyLine = false;
-      inTable = true;
-      tableLines.push(lines[i]!);
-    } else {
-      if (inTable) flushTable();
-
-      if (isOriginalSectionTitle(line, chapter, allChapters)) {
-        flushPara();
-        hasEmptyLine = false;
-        continue;
-      } else if (isOriginalCaption(line, chapter)) {
-        flushPara();
-        hasEmptyLine = false;
-        continue;
-      } else if (isStrayHeading(line)) {
-        flushPara();
-        hasEmptyLine = false;
-        blocks.push({ type: "heading2", text: line });
-      } else {
-        const isBulletItem = BULLET_ITEM_REGEX.test(line);
-        const isNumberedItem = NUMBERED_ITEM_REGEX.test(line);
-        // Wider APA reference detection: "Author, A. (YYYY)" or "Author et al." or "Author & Author"
-        const isReferenceLine =
-          /^[A-Z][a-zA-Z\u00C0-\u024F'\-]+,\s+[A-Z][\.\s]/.test(line) ||
-          /^[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+\s+et\s+al\./.test(line) ||
-          /^[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+,\s+[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+,\s+&/.test(line) ||
-          /^[A-Z][a-zA-Z\s\u00C0-\u024F'\-]+\s+\((?:19|20)\d{2}\)/.test(line);
-
-        let cleanLine = line
-          // Strip leading AI-generated dashes
-          .replace(/^[—–]\s+/, "")
-          // Strip AI noise
-          .replace(/\bREQUIRES_USER_REVIEW\b/g, "")
-          .replace(/→\s*/g, "")
-          .replace(/=>\s*/g, "")
-          .replace(/```[a-z]*/gi, "")
-          .replace(/```/g, "")
-          .trim();
-
-        if (isBulletItem) {
-          flushPara();
-          blocks.push({ type: "bullet" as any, text: cleanLine });
-          hasEmptyLine = false;
-        } else if (isNumberedItem) {
-          flushPara();
-          blocks.push({ type: "listline", text: cleanLine });
-          hasEmptyLine = false;
-        } else if (isReferenceLine) {
-          flushPara();
-          // Split inline merged references running together on a single line
-          const splitRefs = line.split(/(?<=\b(?:19|20)\d{2}[a-z]?\b[).;]*)\s+(?=[A-Z][a-zA-Z\s.-]+,\s+[A-Z]\.)/);
-          splitRefs.forEach((ref) => {
-            if (ref.trim()) blocks.push({ type: "reference", text: ref.trim() });
-          });
-          hasEmptyLine = false;
-        } else {
-          if (pendingPara.length > 0) {
-            const prevLine = pendingPara[pendingPara.length - 1]!;
-            const shouldMergeLines = shouldMerge(prevLine, line, hasEmptyLine);
-            if (!shouldMergeLines) {
-              flushPara();
-            }
-          }
-          pendingPara.push(cleanLine);
-          hasEmptyLine = false;
-        }
+      if (inTable && trimmed === "") {
+        // Empty line ends the table
+        inTable = false;
       }
+      processedLines.push(line);
     }
   }
+  
+  noPlaceholder = processedLines.join("\n");
 
-  flushPara();
-  flushCode();
-  if (inTable) flushTable();
-  return blocks;
+  // Initialize the Semantic AST Engine
+  const engine = new SemanticASTEngine(noPlaceholder);
+  
+  // Apply deterministic transformations to fix OCR errors and reference fragmentation
+  engine.sanitizeParagraphs();
+  if (chapter?.title && chapter.title.toUpperCase().includes("REFERENCE")) {
+     engine.unifyReferences();
+  }
+
+  // Compile the AST to DOCX Document Blocks
+  const compiler = new ASTCompiler(engine, finalImages);
+  return compiler.compile();
 }
 
-/** Split blocks into page-sized chunks using an accurate page-height budget in PDF points (648pt printable height). */
 function chunkBlocks(blocks: Block[]): Block[][] {
   const pages: Block[][] = [];
   let current: Block[] = [];
@@ -765,11 +526,7 @@ function wrapTextToLines(text: string, maxLen: number = 20): string[] {
   return lines;
 }
 
-/**
- * Builds the single final document model that drives preview, DOCX and PDF.
- * Body pages are laid out first so that the Table of Contents, List of Figures
- * and List of Tables carry page numbers taken from the real rendered document.
- */
+
 export function buildFinalDocument(input: any): FinalDocument {
   const selection = input.selection || input.institution || {};
   const config = input.config || resolveConfig(selection);
